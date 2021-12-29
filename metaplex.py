@@ -1,7 +1,21 @@
 import json
 
 
-def format_metaplex_metadata(dict_attrs):
+# convert attributes into list of dicts with trait_type: value format
+def format_attributes(dict_attrs):
+    attributes = []
+    for attr in dict_attrs:
+        for k, v in attr.items():
+            attributes.append( {"trait_type": k, "value": v} )
+    return attributes
+
+def generate_metadata(
+    name, 
+    symbol, 
+    description, 
+    external_url='homunculi.org/art',
+    seller_fee_basis_points=0):
+
 
     metadata = {
         "name": "Solflare X NFT",
@@ -19,8 +33,8 @@ def format_metaplex_metadata(dict_attrs):
             {
             "trait_type": "mobile",
             "value": "yes"
-        },
-        {
+            },
+            {
             "trait_type": "extension",
             "value": "yes"
             }

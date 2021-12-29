@@ -15,3 +15,7 @@ def load_coco_categories(path="annotations/instances_val2017.json"):
     for cat in categories:
         categories_id[cat['id']] = cat
     return categories_id
+
+def save_json(path, data):
+    with open(path, 'w') as outfile:
+        json.dump(data, outfile)

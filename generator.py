@@ -19,10 +19,12 @@ def botr_generator(dataset, annotations, dims, batch_size=4, fill_target=0.99, m
       num_filled = 0
       composite_mask = torch.zeros((dims[0], dims[1], 1))
       composite = torch.zeros((dims[0], dims[1], 3))
+      attr_list = []
       while num_filled / (dims[0] * dims[1]) < fill_target:
         idx = np.random.randint(0, dataset.__len__())
         img, ann = dataset[idx]
         rand_ann = random.choice(ann)
+        attr_list.append(ann)
         img = TF.resize(img, size=dims)
         img = img.permute(1,2,0)
         rand_mask = dataset.coco.annToMask(rand_ann)
@@ -44,6 +46,8 @@ def botr_generator(dataset, annotations, dims, batch_size=4, fill_target=0.99, m
       composite = (composite - torch.min(composite)) / ((torch.max(composite) - torch.min(composite)) + 1e-7)
       if for_nn:
         composite = composite.permute(2, 0, 1)
+
+      # FIX SO WHOLE ATTR LIST IS PUT INTO METADATA LIST
       if rand_ann["category_id"] - 100 in annotations.keys():
         img_batch.append(composite)
         metadata = annotations[rand_ann["category_id"] - 100]

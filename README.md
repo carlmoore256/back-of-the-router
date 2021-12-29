@@ -1,4 +1,4 @@
-# back-of-the-router
+# Back of the Router
 Generate extremely confusing looking images
 
 Examples of images generated using COCO dataset:

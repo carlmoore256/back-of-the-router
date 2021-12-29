@@ -12,7 +12,10 @@ def botr_generator(dataset, annotations, dims, batch_size=4, fill_target=0.99, m
   while True:
     img_batch = []
     metadata_batch = []
-    for b in range(batch_size):
+    b = 0
+    batch_ready = False
+    while not batch_ready:
+    # for b in range(batch_size):
       num_filled = 0
       composite_mask = torch.zeros((dims[0], dims[1], 1))
       composite = torch.zeros((dims[0], dims[1], 3))
@@ -41,10 +44,15 @@ def botr_generator(dataset, annotations, dims, batch_size=4, fill_target=0.99, m
       composite = (composite - torch.min(composite)) / ((torch.max(composite) - torch.min(composite)) + 1e-7)
       if for_nn:
         composite = composite.permute(2, 0, 1)
-      img_batch.append(composite)
-      print(rand_ann)
-      metadata = annotations[rand_ann["category_id"]]
-      metadata_batch.append(metadata)
+      if rand_ann["category_id"] - 100 in annotations.keys():
+        img_batch.append(composite)
+        metadata = annotations[rand_ann["category_id"] - 100]
+        metadata_batch.append(metadata)
+        b += 1
+        if b == batch_size:
+          batch_ready = True
+      else:
+        print(f"{rand_ann['category_id'] - 100} \n")
+
     img_batch = torch.stack(img_batch)
-    metadata_batch = torch.stack(metadata_batch)
     yield img_batch, metadata_batch

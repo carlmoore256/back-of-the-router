@@ -135,3 +135,6 @@ val2017/
 stuff_val2017_pixelmaps/
 
 *.zip
+
+assets/*.json
+saved_generated/*.png

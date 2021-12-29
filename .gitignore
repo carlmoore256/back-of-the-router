@@ -128,4 +128,10 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
+generated/
 annotations/
+
+val2017/
+stuff_val2017_pixelmaps/
+
+*.zip

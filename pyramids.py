@@ -4,6 +4,7 @@ import scipy
 import torch
 import torchvision.transforms.functional as TF
 import random
+import scipy.ndimage
 
 def decimate(image, kernel):
   # blurred = scipy.signal.convolve2d(image, kernel, mode="same")

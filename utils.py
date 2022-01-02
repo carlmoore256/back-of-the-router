@@ -10,7 +10,7 @@ def imshow(img):
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
     plt.show()
 
-def load_coco_categories(path="annotations/instances_val2017.json"):
+def load_coco_categories(path="annotations/stuff_val2017.json"):
     with open(path,'r') as COCO:
         categories = json.loads(COCO.read())['categories']
     categories_id = {}

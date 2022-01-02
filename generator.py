@@ -1,5 +1,6 @@
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
+from pyramids import blend_masked_rgb
 import numpy as np
 import random
 import torch
@@ -16,15 +17,14 @@ def botr_generator(dataset, annotations, dims, batch_size=4, fill_target=0.99, m
     batch_ready = False
     while not batch_ready:
     # for b in range(batch_size):
-      num_filled = 0
+      px_filled = 0
       composite_mask = torch.zeros((dims[0], dims[1], 1))
       composite = torch.zeros((dims[0], dims[1], 3))
       attr_list = []
-      while num_filled / (dims[0] * dims[1]) < fill_target:
+      while px_filled / (dims[0] * dims[1]) < fill_target:
         idx = np.random.randint(0, dataset.__len__())
         img, ann = dataset[idx]
         rand_ann = random.choice(ann)
-        attr_list.append(ann)
         img = TF.resize(img, size=dims)
         img = img.permute(1,2,0)
         rand_mask = dataset.coco.annToMask(rand_ann)
@@ -34,29 +34,37 @@ def botr_generator(dataset, annotations, dims, batch_size=4, fill_target=0.99, m
         fill_mask = torch.zeros_like(composite_mask)
         fill_mask = torch.logical_or(rand_mask, composite_mask)
         fill_mask[composite_mask == 1] = 0
-        fill_percent = torch.count_nonzero(fill_mask) / (dims[0] * dims[1])
-        num_filled = torch.count_nonzero(composite_mask)
+
+        px_filled = torch.count_nonzero(composite_mask)
+        fill_percent = px_filled / (dims[0] * dims[1])
+
         this_step_fill = (torch.rand((1,)) * step_fill_jitter) + max_step_fill
         if fill_percent > this_step_fill:
           continue
         else:
+          attr_list.append(ann)
+          # composite = blend_masked_rgb(composite.numpy(), img.numpy(), composite_mask.numpy(), fill_mask.numpy())
+          # composite = torch.as_tensor(composite)
+          # composite_mask = torch.logical_or(composite_mask, rand_mask)
+
+          px_filled = torch.count_nonzero(composite_mask)
           composite_mask = torch.logical_or(composite_mask, rand_mask)
-          num_filled = torch.count_nonzero(composite_mask)
+          # px_filled = torch.count_nonzero(composite_mask)
           composite += (fill_mask * img)
       composite = (composite - torch.min(composite)) / ((torch.max(composite) - torch.min(composite)) + 1e-7)
       if for_nn:
         composite = composite.permute(2, 0, 1)
 
       # FIX SO WHOLE ATTR LIST IS PUT INTO METADATA LIST
-      if rand_ann["category_id"] - 100 in annotations.keys():
-        img_batch.append(composite)
-        metadata = annotations[rand_ann["category_id"] - 100]
-        metadata_batch.append(metadata)
-        b += 1
-        if b == batch_size:
-          batch_ready = True
-      else:
-        print(f"{rand_ann['category_id'] - 100} \n")
+      # if rand_ann["category_id"] - 100 in annotations.keys():
+      img_batch.append(composite)
+      metadata = annotations[rand_ann["category_id"] - 100]
+      metadata_batch.append(metadata)
+      b += 1
+      if b == batch_size:
+        batch_ready = True
+    # else:
+    #   print(f"{rand_ann['category_id'] - 100} \n")
 
     img_batch = torch.stack(img_batch)
     yield img_batch, metadata_batch

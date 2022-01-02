@@ -6,6 +6,10 @@ import torchvision.transforms.functional as TF
 import random
 import scipy.ndimage
 
+def sharpen(image, amount):
+    image = TF.adjust_sharpness(image, amount)
+    return image
+
 def decimate(image, kernel):
   # blurred = scipy.signal.convolve2d(image, kernel, mode="same")
   blurred = scipy.ndimage.filters.convolve(image, kernel, mode="constant")
@@ -16,15 +20,18 @@ def interpolate(image, kernel):
   img_up[::2, ::2] = image
   return scipy.ndimage.filters.convolve(img_up, kernel * 4, mode="constant")
 
-def create_kernel():
-  return np.array([[1,4,6,4,1],
-                   [4,16,24,16,4],
-                   [6,24,36,24,6],
-                   [4,16,24,16,4],
-                   [1,4,6,4,1]]) * (1/256)
+
+def create_kernel(l=5, sig=1.):
+    """\
+    creates gaussian kernel with side length `l` and a sigma of `sig`
+    """
+    ax = np.linspace(-(l - 1) / 2., (l - 1) / 2., l)
+    gauss = np.exp(-0.5 * np.square(ax) / np.square(sig))
+    kernel = np.outer(gauss, gauss)
+    return kernel / np.sum(kernel)
 
 
-kernel = create_kernel()
+# kernel = create_kernel()
 
 # the way shown in the slides (better)
 def generate_pyramid(image, kernel):
@@ -53,10 +60,8 @@ def reconstruct(gaussian, laplacian, kernel):
 # input two single channel images img_A, img_B and a mask
 # blend pyramids with provided mask generator function mask_f
 # provide gaussian kernel
-def blend_masked(img_A, img_B, mask_A, mask_B, plot_levels=False):
-  kernel = create_kernel()
-
-
+def blend_masked(img_A, img_B, mask_A, mask_B, kernel_size=5, kernel_sig=1, plot_levels=False):
+  kernel = create_kernel(kernel_size, kernel_sig)
   img1_G, img1_L = generate_pyramid(img_A, kernel)
   img2_G, img2_L = generate_pyramid(img_B, kernel)
 
@@ -83,38 +88,36 @@ def blend_masked(img_A, img_B, mask_A, mask_B, plot_levels=False):
     
     blend = l_1+l_2
     # blend = (blend - np.min(blend)) / ((np.max(blend) - np.min(blend)) + 1e-7)
-    
-
     blended_L.append(blend)
 
     if plot_levels:
-      plt.subplot(151)
-      plt.title("img A")
-      plt.imshow(l_1, cmap="gray")
-      plt.subplot(152)
-      plt.title("img B")
-      plt.imshow(l_2, cmap="gray")
-      plt.subplot(153)
-      plt.title("mask A")
-      plt.imshow(mask_A_scaled, cmap="gray")
-      plt.subplot(154)
-      plt.title("mask B")
-      plt.imshow(mask_B_scaled, cmap="gray")
-      plt.subplot(155)
-      plt.title("blended")
-      plt.imshow(blend, cmap="gray")
-      plt.show()
+      plot_pyramid_level(l_1, l_2, mask_A_scaled, mask_B_scaled, blend)
  
   blended_L = blended_L[::-1]
-
   recon = reconstruct(img1_G[-1], blended_L, kernel)
   return recon
 
+def plot_pyramid_level(l_1, l_2, mask_A, mask_B, blend):
+  plt.subplot(151)
+  plt.title("img A")
+  plt.imshow(l_1, cmap="gray")
+  plt.subplot(152)
+  plt.title("img B")
+  plt.imshow(l_2, cmap="gray")
+  plt.subplot(153)
+  plt.title("mask A")
+  plt.imshow(mask_A, cmap="gray")
+  plt.subplot(154)
+  plt.title("mask B")
+  plt.imshow(mask_B, cmap="gray")
+  plt.subplot(155)
+  plt.title("blended")
+  plt.imshow(blend, cmap="gray")
+  plt.show()
 
-def blend_masked_rgb(img1_c, img2_c, mask_A, mask_B):
-  r = blend_masked(img1_c[:,:,0], img2_c[:,:,0], mask_A, mask_B, False)
-  g = blend_masked(img1_c[:,:,1], img2_c[:,:,1], mask_A, mask_B)
-  b = blend_masked(img1_c[:,:,2], img2_c[:,:,2], mask_A, mask_B)
-
+def blend_masked_rgb(img_A, img_B, mask_A, mask_B, kernel_size=5, kernel_sig=1):
+  r = blend_masked(img_A[:,:,0], img_B[:,:,0], mask_A, mask_B, kernel_size=5, kernel_sig=1)
+  g = blend_masked(img_A[:,:,1], img_B[:,:,1], mask_A, mask_B, kernel_size=5, kernel_sig=1)
+  b = blend_masked(img_A[:,:,2], img_B[:,:,2], mask_A, mask_B, kernel_size=5, kernel_sig=1)
   blended_c = np.stack((r,g,b), axis=-1)
   return blended_c

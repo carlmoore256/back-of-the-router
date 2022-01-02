@@ -93,6 +93,7 @@ def generate_single(dataset, info, dims, fill_target=0.99, max_step_fill=0.1, st
       composite = composite.permute(2, 0, 1)
 
     name = generate_name(metadata)
+    metadata["name"] = name
     yield composite, metadata, name
 
 def botr_generator(dataset, annotations, dims, batch_size=4, fill_target=0.99, max_step_fill=0.1, step_fill_jitter = 0.3, for_nn=False):

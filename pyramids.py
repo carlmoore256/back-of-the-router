@@ -30,9 +30,6 @@ def create_kernel(l=5, sig=1.):
     kernel = np.outer(gauss, gauss)
     return kernel / np.sum(kernel)
 
-
-# kernel = create_kernel()
-
 # the way shown in the slides (better)
 def generate_pyramid(image, kernel):
   G = [image,]

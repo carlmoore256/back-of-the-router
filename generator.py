@@ -21,7 +21,16 @@ def generate_name(metadata):
       attr_idx += 1
   return name
 
-def generate_single(dataset, info, dims, fill_target=0.99, max_step_fill=0.1, step_fill_jitter = 0.3, sharpness=10, for_nn=False):
+def generate_single(
+  dataset, info, dims, 
+  fill_target=0.99, 
+  max_step_fill=0.1, 
+  step_fill_jitter = 0.3, 
+  sharpness=10, 
+  kernel_size=1,
+  kernel_sig=1, 
+  for_nn=False):
+  
   transform = transforms.Compose(
   [transforms.ToTensor(), 
   transforms.Resize(size=dims),
@@ -33,7 +42,7 @@ def generate_single(dataset, info, dims, fill_target=0.99, max_step_fill=0.1, st
     total_px_filled = 0
     composite_mask = torch.zeros((dims[0], dims[1], 1))
     composite = torch.zeros((dims[0], dims[1], 3))
-    metadata = {}
+    # metadata = {}
     metadata = {key: 0 for key in unique_categories}
     map = {}
     # name = ""
@@ -76,8 +85,8 @@ def generate_single(dataset, info, dims, fill_target=0.99, max_step_fill=0.1, st
           img_B=composite.numpy(), 
           mask_A=fill_mask.numpy(), 
           mask_B=composite_mask.numpy(),
-          kernel_size=1,
-          kernel_sig=1)
+          kernel_size=kernel_size,
+          kernel_sig=kernel_sig)
 
         composite = torch.as_tensor(composite)
         # composite += fill_mask * img

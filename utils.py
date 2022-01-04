@@ -35,3 +35,8 @@ def copy_file(source, new_directory):
     destination = os.path.join(new_directory, os.path.split(source)[-1])
     shutil.copyfile(source, destination)
     print(f'copied {source} to {destination}')
+
+def load_coco_image(filename, path="/content/dataset/train2017"):
+    filepath = os.path.join(path, filename)
+    img = Image.open(filepath)
+    return img

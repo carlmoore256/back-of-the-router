@@ -2,7 +2,8 @@
 from PIL import Image
 # import torchvision.transforms as transforms
 # import torchvision.transforms.functional as TF
-from pyramids import blend_masked_rgb, sharpen
+from postprocessing import sharpen_image
+from pyramids import blend_masked_rgb
 from utils import load_dict, save_dict, filter_list, display_multiple_images
 from coco_utils import load_coco_info, load_coco_image, generate_assets, coco_value_distribution, closest_sized_annotation, print_generator_status, load_coco_obj
 from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent
@@ -102,6 +103,7 @@ class BOTR_Generator():
     prev_px_filled = 0
     skipped = 0
 
+
     pbar = tqdm(total=config['targetFill'])
     while px_filled < config['targetFill']:
       randCoco = self.get_coco_example()
@@ -138,23 +140,25 @@ class BOTR_Generator():
 
       image = load_coco_image(randCoco['filename'], fit=config['outputSize'])
 
-      if config['image_blending']:
-        # masked = np.clip(image * exclusionMask, 0, 255.)
+      if config['image_blending']['use_blending']:
         blendedComposite = blend_masked_rgb(
-          img_A=image.astype(float)/255,
-          img_B=composite.astype(float)/255, 
+          img_A=image,
+          img_B=composite, 
           mask_A=exclusionMask, 
           mask_B=compositeMask,
-          kernel_size=config["kernel_size"],
-          kernel_sig=config["kernel_sig"],
-          max_depth=config['pyramid_depth'])
-        composite = np.clip(blendedComposite * 255, 0, 255).astype(np.uint8)
+          blendConfig=config['image_blending'])
+        # blendedComposite = blend_masked_rgb(
+        #   img_A=image.astype(float)/255,
+        #   img_B=composite.astype(float)/255, 
+        #   mask_A=exclusionMask, 
+        #   mask_B=compositeMask,
+        #   blendConfig=config['blendConfig'])
+        composite = blendedComposite.copy()
+        # composite = np.clip(blendedComposite * 255, 0, 255).astype(np.uint8)
       else:
         # add the masked content on to the composite (inplace modify composite)
         composite = mask_add_composite(image, exclusionMask, composite)
 
-      # generate composite mask
-      # compositeMask = np.clip(composite, 0, 1)
       compositeMask = np.logical_or(exclusionMask, compositeMask).astype(np.uint8)
       
       if imageProgress:
@@ -165,7 +169,7 @@ class BOTR_Generator():
       px_filled = calc_fill_percent(compositeMask, totalArea)
 
       categName = self.ann_category_name(chosenAnn)
-      attributes['category_percentage'][categName] += areaPercent
+      attributes['category_percentage'][categName] += px_filled-prev_px_filled
       
       # include which objects are filled
       attributes['text_metadata']['objects'].append(categName)
@@ -262,6 +266,13 @@ def generate_name(metadata):
       attr_idx += 1
   return name
 
+
+
+
+
+# ===== old stuff ===============================
+
+
 def generate_single(
   dataset, info, dims, 
   fill_target=0.99, 
@@ -336,7 +347,7 @@ def generate_single(
         letters_category = int(((len(category)) * fill_percent)**4)
         # name += category[:letters_category]
 
-    composite = sharpen(composite.permute(2, 0, 1), sharpness).permute(1, 2, 0)
+    composite = sharpen_image(composite.permute(2, 0, 1), sharpness).permute(1, 2, 0)
 
     composite = (composite - torch.min(composite)) / ((torch.max(composite) - torch.min(composite)))
     if for_nn:

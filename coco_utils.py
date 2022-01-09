@@ -7,7 +7,7 @@ import json
 import os
 from PIL import Image, ImageOps
 import pickle
-from utils import save_dict, load_dict
+from utils import save_dict, load_dict, print_pretty
 
 def sort_coco(coco_stuff, coco_instances, coco_captions):
     avail_caption_imgs = get_available_images(coco_captions['annotations'])
@@ -90,10 +90,19 @@ def load_coco_categories(path="annotations/stuff_val2017.json"):
         categories_id[cat['id']] = cat
     return categories_id
 
-def load_coco_image(filename, path="/content/dataset/train2017"):
+def load_coco_image(filename, path="dataset/train2017", fit=None, asarray=True):
     filepath = os.path.join(path, filename)
     img = Image.open(filepath)
+    if fit is not None:
+        img = ImageOps.fit(img, fit)
+    if img.mode != "RGB":
+        img = img.convert('RGB')
+    if asarray:
+        img = np.asarray(img)
     return img
+
+def load_coco_obj(path):
+    return COCO(path)
 
 def get_available_images(annotations):
     return sorted(list(set(([key['image_id'] for key in annotations]))))
@@ -117,6 +126,9 @@ def coco_value_distribution(coco_dataset, key="stuff_ann", val_key="area"):
             val = [ann[val_key] for ann in coco[key]]
         dist += val
     return dist, np.mean(dist), np.std(dist)
+
+def print_generator_status(attributes, percentFill):
+    print(f'filled {percentFill}%')
 
 def generate_assets(base_path):
     coco_instances = COCO(f"{base_path}/annotations/instances_train2017.json")

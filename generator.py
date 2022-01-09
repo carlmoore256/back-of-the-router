@@ -1,8 +1,10 @@
+from PIL.Image import composite
 import torchvision.transforms as transforms
 import torchvision.transforms.functional as TF
 from pyramids import blend_masked_rgb, sharpen
-from utils import load_dict, save_dict, filter_list
-from coco_utils import generate_assets, coco_value_distribution, closest_sized_annotation
+from utils import load_dict, save_dict, filter_list, display_multiple_images
+from coco_utils import load_coco_info, load_coco_image, generate_assets, coco_value_distribution, closest_sized_annotation, print_generator_status, load_coco_obj
+from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent
 import numpy as np
 import os
 import random
@@ -18,10 +20,16 @@ class BOTR_Generator():
     pathCocoOrganized = os.path.join(dataset_path, "coco_organized.pickle")
     if not os.path.isfile(pathCatMap) and not os.path.isfile(pathCocoOrganized):
       generate_assets(dataset_path)
-
+    
+    print(f'loading coco assets - {pathCatMap}')
     self.category_map = load_dict(pathCatMap)
+    print(f'loading coco assets - {pathCocoOrganized}')
     self.coco_examples = load_dict(pathCocoOrganized)
     self.all_ids = list(self.coco_examples.keys())
+
+    captionsPath = os.path.join(dataset_path, "annotations", "captions_train2017.json")
+    print(f'loading coco assets - {captionsPath}')
+    self.cocoCaptions = load_coco_obj(captionsPath)
 
     self.distStuff, self.meanAreaStuff, self.stdAreaStuff = coco_value_distribution(
       self.coco_examples, key="stuff_ann", val_key="area")
@@ -37,6 +45,10 @@ class BOTR_Generator():
  
   # def fill_with_annotation()
 
+  # use the coco object to extract a binary mask
+  def get_mask(self, ann):
+    return self.cocoCaptions.annToMask(ann)
+
   # selects an average sized chunk of stuff or instances
   def random_size_target(self, annKey="stuff_ann", sizeScalar=1., stdScalar=1.):
     if annKey == "stuff_ann":
@@ -49,11 +61,14 @@ class BOTR_Generator():
   
   # select an annotation from a gaussian distribution
   def gaussian_select_patch(self, annList, annKey, avgSize=1., sizeVariance=1.):
-    sizeTarget = self.random_size_target(
-      annKey, 
-      sizeScalar=avgSize, 
-      stdScalar=sizeVariance)
-    return closest_sized_annotation(sizeTarget, annList)
+    if len(annList) > 1:
+      sizeTarget = self.random_size_target(
+        annKey, 
+        sizeScalar=avgSize, 
+        stdScalar=sizeVariance)
+      return closest_sized_annotation(sizeTarget, annList)
+    else:
+      return annList[0]
 
   def gen_attribute_dict(self):
     attributes = {cat["supercategory"]: 0 for cat in self.category_map.values()}
@@ -70,65 +85,95 @@ class BOTR_Generator():
     # map string category names to annotations
     annCategories = {self.ann_category_name(ann) : ann for ann in annotations}
     # construct list of allowed values
-    filtered = [v for k, v in annCategories if k in allowedCategories]
+    filtered = [v for k, v in annCategories.items() if k in allowedCategories]
     return filtered
     
-  def generate_image(self, config):
+  def generate_image(self, config, imageProgress=False):
 
-    config = {
-      # average size of each patch (1 being mean of distribution)
-      'avgPatchSize' : 0.8,
-      # average size variance of each patch added
-      'avgPatchVariance' : 0.01,
-      # target percentage of pixels to fill
-      'targetFill' : 0.99,
-      # output image size
-      'outputSize' : (512, 512),
-      # prevent supercategories from appearing
-      'allowedCategories' : ["person", "other"],
-      # choose either "stuff_ann" or "instances_ann"
-      'ann_key' : "stuff_ann",
-      # prevent supercategories from appearing
-      'disallowed_catg' : ["person", "other"],
-      # choose either "stuff_ann" or "instances_ann"
-    }
- 
-
-    composite = np.zeros(
-      (config["outputSize"][0], config["outputSize"][1], 3),
-      dtype=np.uint8)
+    composite = np.zeros((config["outputSize"][0], config["outputSize"][1],3), dtype=np.uint8)
+    compositeMask = np.zeros((config["outputSize"][0], config["outputSize"][1], 1), dtype=np.float)
 
     attributes = self.gen_attribute_dict()
+    totalArea = config['outputSize'][0]*config['outputSize'][1]
 
     px_filled = 0
 
     while px_filled < config['targetFill']:
       randCoco = self.get_coco_example()
       annList = randCoco[config['ann_key']]
-
-      if len(annList) == 0:
-        print(f'! len of annotation is 0, skipping')
-        continue
-
       annList = self.filter_ann_categories(annList, config["allowedCategories"])
-
+      
+      if len(annList) == 0:
+        print(f'! len of valid annotations is 0, skipping...')
+        continue
+  
       # randomly select a coco annotation with
-      # gaussian probability of selecting an average sized one
+      # gaussian probability of selecting a given sized one
       chosenAnn = self.gaussian_select_patch(
-        annList=randCoco[config['ann_key']], 
+        annList=annList,
         annKey=config['ann_key'],
         avgSize=config['avgPatchSize'],
-        avgVariance=['avgPatchVariance'])
+        sizeVariance=config['avgPatchVariance'])
 
-      annCateg = self.ann_category_name(chosenAnn)
+      # obtain mask of the coco annotation
+      objectMask = self.get_mask(chosenAnn)
+      # resize the mask to fit within bounds of output size
+      # here we can choose to apply other transformations if we want
+      objectMask = resize_fit(objectMask, config['outputSize'])
+      
+      exclusionMask = create_exclusion_mask(objectMask, compositeMask)
 
-      if annCateg not in config["allowedCategories"]:
-        print(f'{annCateg} not in allowedCategories, skipping...')
+      areaPercent = calc_fill_percent(objectMask, totalArea)
+      
+      if not exclusionMask.any() or areaPercent < config['minPatchArea']:
+        print(f'! area {areaPercent}% smaller than minPatchArea {config["minPatchArea"]}')
         continue
 
+      image = load_coco_image(randCoco['filename'], fit=config['outputSize'])
 
+      # add the masked content on to the composite (inplace modify composite)
+      composite = mask_add_composite(image, exclusionMask, composite)
 
+      # generate composite mask
+      # compositeMask = np.clip(composite, 0, 1)
+      compositeMask = np.logical_or(exclusionMask, compositeMask).astype(np.uint8)
+      
+      if imageProgress:
+        display_multiple_images(
+          [image, objectMask, compositeMask, exclusionMask, composite], 
+          ["original img", "chosen mask", "composite_mask", "exclusion mask", "composite"])
 
+      px_filled = calc_fill_percent(compositeMask, totalArea)
+
+      categName = self.ann_category_name(chosenAnn)
+      attributes[categName] += areaPercent
+      
+      # include which objects are filled
+      attributes['text_metadata']['objects'].append(categName)
+      attributes['text_metadata']['objects'].append(randCoco['caption'])
+      print_generator_status(attributes, px_filled)
+
+    return composite, attributes
+
+    # config = {
+    #   # average size of each patch (1 being mean of distribution)
+    #   'avgPatchSize' : 0.8,
+    #   # average size variance of each patch added
+    #   'avgPatchVariance' : 0.01,
+    #   # minimum area of a patch added, expressed as percentage px after masking
+    #   'minPatchArea' : 1e-4, 
+    #   # target percentage of pixels to fill
+    #   'targetFill' : 0.99,
+    #   # output image size
+    #   'outputSize' : (512, 512),
+    #   # prevent supercategories from appearing
+    #   'allowedCategories' : ["person", "other"],
+    #   # choose either "stuff_ann" or "instances_ann"
+    #   'ann_key' : "stuff_ann",
+    #   # prevent supercategories from appearing
+    #   'disallowed_catg' : ["person", "other"],
+    #   # choose either "stuff_ann" or "instances_ann"
+    # }
 
 
 # def attribute_map(category_map)

@@ -1,13 +1,13 @@
 import numpy as np
 from PIL import Image, ImageOps
+from utils import arr2d_to_3d
 
-def prepare_mask(annotation, dims, coco):
-  mask = coco.annToMask(annotation)
-  mask = Image.fromarray(mask)
-  mask = ImageOps.fit(mask, dims[:2])
-  mask = np.expand_dims(np.asarray(mask), -1) 
-  mask = np.repeat(mask, 3, axis=-1)
-  return mask
+def resize_fit(array, dims):
+    fit = Image.fromarray(array)
+    fit = np.asarray(ImageOps.fit(fit, dims))
+    if len(fit.shape) == 2:
+      fit = np.expand_dims(fit, -1)
+    return fit
 
 def create_exclusion_mask(mask_A, mask_B, format_uint8=True):
   excl_mask = mask_A.copy()
@@ -17,3 +17,19 @@ def create_exclusion_mask(mask_A, mask_B, format_uint8=True):
   else:
     excl_mask = np.clip(excl_mask, 0, 1)    
   return excl_mask
+
+def mask_add_composite(source, mask, composite):
+    mask = np.clip(mask, 0, 1)
+    masked = np.uint8(source * mask)
+    # composite[exclusionMask > 0] += np.clip(image * exclusionMask, 0, 255).astype(np.uint8)
+    composite = np.clip(composite + masked, 0, 255)
+    return composite
+
+def calc_fill_percent(mask, area):
+    return np.count_nonzero(mask) / float(area)
+
+# def add_to_composite(mask)
+    # source = Image.fromarray(source)
+    # mask = Image.fromarray(mask)
+    # composite = Image.fromarray(composite)
+    # composite = Image.composite(source, composite, mask)

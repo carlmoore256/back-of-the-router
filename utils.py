@@ -5,10 +5,14 @@ import shutil
 import os
 import pickle
 
+def print_pretty(data):
+    print(json.dumps(data, indent=2))
+
 def imshow(img):
-    img = img / 2 + 0.5     # unnormalize
-    npimg = img.numpy()
-    plt.imshow(np.transpose(npimg, (1, 2, 0)))
+    # img = img / 2 + 0.5     # unnormalize
+    # npimg = img.numpy()
+
+    plt.imshow(img)
     plt.show()
 
 def display_multiple_images(images=[], titles=[]):
@@ -43,3 +47,8 @@ def load_dict(path='dataset/coco_organized.pickle'):
     with open(path, 'rb') as handle:
         dict_obj = pickle.load(handle)
     return dict_obj
+
+def arr2d_to_3d(arr):
+    arr = np.expand_dims(np.asarray(arr), -1)
+    arr = np.repeat(arr, 3, axis=-1)
+    arr = np.repeat(arr, 3, axis=-1)

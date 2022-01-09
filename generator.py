@@ -1,6 +1,7 @@
-from PIL.Image import composite
-import torchvision.transforms as transforms
-import torchvision.transforms.functional as TF
+# from PIL.Image import composite, fromarray
+from PIL import Image
+# import torchvision.transforms as transforms
+# import torchvision.transforms.functional as TF
 from pyramids import blend_masked_rgb, sharpen
 from utils import load_dict, save_dict, filter_list, display_multiple_images
 from coco_utils import load_coco_info, load_coco_image, generate_assets, coco_value_distribution, closest_sized_annotation, print_generator_status, load_coco_obj
@@ -8,12 +9,13 @@ from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_
 import numpy as np
 import os
 import random
-import torch
+# import torch
+from tqdm import tqdm
 
 # a class that can remain loaded, and change aspects
 # of generative properties
 class BOTR_Generator():
-
+  # ADD METHOD TO FILTER OUT VALID LICENSES!
   def __init__(self, dataset_path="dataset/"):
 
     pathCatMap = os.path.join(dataset_path, "category_map.pickle")
@@ -66,12 +68,12 @@ class BOTR_Generator():
         annKey, 
         sizeScalar=avgSize, 
         stdScalar=sizeVariance)
-      return closest_sized_annotation(sizeTarget, annList)
+      return closest_sized_annotation(annList, sizeTarget)
     else:
       return annList[0]
 
   def gen_attribute_dict(self):
-    attributes = {cat["supercategory"]: 0 for cat in self.category_map.values()}
+    attributes = {"category_percentage": {cat["supercategory"]: 0 for cat in self.category_map.values()}}
     attributes['text_metadata'] = {
     "objects" : [],
     "descriptions" : [] }
@@ -88,7 +90,7 @@ class BOTR_Generator():
     filtered = [v for k, v in annCategories.items() if k in allowedCategories]
     return filtered
     
-  def generate_image(self, config, imageProgress=False):
+  def generate_image(self, config, imageProgress=False, printWarnings=False):
 
     composite = np.zeros((config["outputSize"][0], config["outputSize"][1],3), dtype=np.uint8)
     compositeMask = np.zeros((config["outputSize"][0], config["outputSize"][1], 1), dtype=np.float)
@@ -97,14 +99,19 @@ class BOTR_Generator():
     totalArea = config['outputSize'][0]*config['outputSize'][1]
 
     px_filled = 0
+    prev_px_filled = 0
+    skipped = 0
 
+    pbar = tqdm(total=config['targetFill'])
     while px_filled < config['targetFill']:
       randCoco = self.get_coco_example()
       annList = randCoco[config['ann_key']]
       annList = self.filter_ann_categories(annList, config["allowedCategories"])
       
       if len(annList) == 0:
-        print(f'! len of valid annotations is 0, skipping...')
+        if printWarnings:
+          print(f'! len of valid annotations is 0, skipping...')
+        skipped+=1
         continue
   
       # randomly select a coco annotation with
@@ -120,19 +127,31 @@ class BOTR_Generator():
       # resize the mask to fit within bounds of output size
       # here we can choose to apply other transformations if we want
       objectMask = resize_fit(objectMask, config['outputSize'])
-      
       exclusionMask = create_exclusion_mask(objectMask, compositeMask)
-
       areaPercent = calc_fill_percent(objectMask, totalArea)
       
-      if not exclusionMask.any() or areaPercent < config['minPatchArea']:
-        print(f'! area {areaPercent}% smaller than minPatchArea {config["minPatchArea"]}')
+      if not exclusionMask.any() or areaPercent < config['minPatchArea'] or areaPercent > config['maxPatchArea']:
+        if printWarnings:
+          print(f'! area {areaPercent}% does not match area parameters: min {config["minPatchArea"]} max {config["maxPatchArea"]}')
+        skipped+=1
         continue
 
       image = load_coco_image(randCoco['filename'], fit=config['outputSize'])
 
-      # add the masked content on to the composite (inplace modify composite)
-      composite = mask_add_composite(image, exclusionMask, composite)
+      if config['image_blending']:
+        # masked = np.clip(image * exclusionMask, 0, 255.)
+        blendedComposite = blend_masked_rgb(
+          img_A=image.astype(float)/255,
+          img_B=composite.astype(float)/255, 
+          mask_A=exclusionMask, 
+          mask_B=compositeMask,
+          kernel_size=config["kernel_size"],
+          kernel_sig=config["kernel_sig"],
+          max_depth=config['pyramid_depth'])
+        composite = np.clip(blendedComposite * 255, 0, 255).astype(np.uint8)
+      else:
+        # add the masked content on to the composite (inplace modify composite)
+        composite = mask_add_composite(image, exclusionMask, composite)
 
       # generate composite mask
       # compositeMask = np.clip(composite, 0, 1)
@@ -146,13 +165,17 @@ class BOTR_Generator():
       px_filled = calc_fill_percent(compositeMask, totalArea)
 
       categName = self.ann_category_name(chosenAnn)
-      attributes[categName] += areaPercent
+      attributes['category_percentage'][categName] += areaPercent
       
       # include which objects are filled
       attributes['text_metadata']['objects'].append(categName)
-      attributes['text_metadata']['objects'].append(randCoco['caption'])
-      print_generator_status(attributes, px_filled)
+      attributes['text_metadata']['descriptions'].append(randCoco['caption'])
+      # print_generator_status(attributes, px_filled, skipped)
+      pbar.update(px_filled-prev_px_filled)
+      prev_px_filled = px_filled
+    pbar.close()
 
+    composite = Image.fromarray(composite)
     return composite, attributes
 
     # config = {
@@ -162,6 +185,7 @@ class BOTR_Generator():
     #   'avgPatchVariance' : 0.01,
     #   # minimum area of a patch added, expressed as percentage px after masking
     #   'minPatchArea' : 1e-4, 
+          # maxPatchArea
     #   # target percentage of pixels to fill
     #   'targetFill' : 0.99,
     #   # output image size
@@ -175,6 +199,50 @@ class BOTR_Generator():
     #   # choose either "stuff_ann" or "instances_ann"
     # }
 
+def generate_zipf_description(metadata, sentence_len=10, plotDist=False):
+    descriptions = metadata.copy().pop("text_metadata")['descriptions']
+
+    all_words = []
+    for d in descriptions:
+        words = []
+        for word in d.split():
+            word = word.lower().replace(".", "")
+            words.append(word)
+            if "." in word:
+                words.append("!")
+        all_words += words
+
+    zipf_chart = {k: 0 for k in list(set(all_words))}
+
+    for word in all_words:
+        zipf_chart[word] += 1
+    zipf_chart = dict(sorted(zipf_chart.items(), key=lambda item: item[1], reverse=True))
+
+    # generate distribution to pull from
+    dist = np.random.exponential(scale=1, size=sentence_len)
+    dist = ((dist - np.min(dist)) / (np.max(dist) - np.min(dist)) * (len(zipf_chart.keys())-1)).astype(int)
+
+    if plotDist:
+        plt.title("zipz chart word occurences")
+        plt.hist(list(zipf_chart.values()), 50, density=True)
+        plt.show()
+        plt.title("exponential distribution")
+        count, bins, ignored = plt.hist(dist, 50, density = True)
+        plt.show()
+
+    sorted_zipf = list(zipf_chart.keys())    
+    sentence = [sorted_zipf[idx] for idx in dist]
+    str_sentence = ''
+    sentence_start = True
+    for word in sentence:
+        if sentence_start:
+            str_sentence += f"{word[0].upper()}{word[1:]}" + " "
+            sentence_start = False
+        else:
+            if word == ".":
+                sentence_start = True
+            str_sentence += word + " "
+    return sentence, str_sentence
 
 # def attribute_map(category_map)
 # attributes = {cat["supercategory"]: 0 for cat in category_map.values()}

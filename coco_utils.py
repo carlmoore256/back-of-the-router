@@ -9,6 +9,16 @@ from PIL import Image, ImageOps
 import pickle
 from utils import save_dict, load_dict, print_pretty
 
+def all_category_names(dataset_path="dataset/", exclude=[]):
+    pathCatMap = os.path.join(dataset_path, "category_map.pickle")
+    if not os.path.isfile(pathCatMap):
+      generate_assets(dataset_path)
+    category_map = load_dict(pathCatMap)
+    names = list(set([cat['supercategory'] for cat in category_map.values()]))
+    for e in exclude:
+        names.remove(e)
+    return names
+
 def sort_coco(coco_stuff, coco_instances, coco_captions):
     avail_caption_imgs = get_available_images(coco_captions['annotations'])
     avail_instance_imgs = get_available_images(coco_instances.dataset['annotations'])
@@ -127,8 +137,8 @@ def coco_value_distribution(coco_dataset, key="stuff_ann", val_key="area"):
         dist += val
     return dist, np.mean(dist), np.std(dist)
 
-def print_generator_status(attributes, percentFill):
-    print(f'filled {percentFill}%')
+def print_generator_status(attributes, percentFill, skipped):
+    print(f'filled {percentFill}% skipped {skipped}')
 
 def generate_assets(base_path):
     coco_instances = COCO(f"{base_path}/annotations/instances_train2017.json")
@@ -137,7 +147,7 @@ def generate_assets(base_path):
 
     sorted_coco = sort_coco(coco_stuff, coco_instances, coco_captions)
     save_dict(sorted_coco, path=f'{base_path}/coco_organized.pickle')
-    category_map(coco_stuff, coco_instances, save_path=f'{base_path}/coco_organized.pickle')
+    category_map(coco_stuff, coco_instances, save_path=f'{base_path}/category_map.pickle')
 
 # sort coco dataset in desired BOTR format, serialize and save
 if __name__ == "__main__":

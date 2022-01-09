@@ -4,24 +4,29 @@ import json
 import shutil
 import os
 import pickle
+import cv2
 
 def print_pretty(data):
     print(json.dumps(data, indent=2))
 
-def imshow(img):
-    # img = img / 2 + 0.5     # unnormalize
-    # npimg = img.numpy()
-
+def imshow(img, title='', size=(10,10)):
+    plt.figure(figsize=size)
+    plt.title(title)
     plt.imshow(img)
+    plt.xticks([])
+    plt.yticks([])
     plt.show()
 
-def display_multiple_images(images=[], titles=[]):
-    plt.figure(figsize=(20,10))
+def display_multiple_images(images=[], titles=[], size=(20,10)):
+    plt.figure(figsize=size)
     for i in range(len(images)):
         plt.subplot(1,len(images), i+1)
         plt.title(titles[i])
         plt.imshow(images[i])
+        plt.xticks([])
+        plt.yticks([])
     plt.show()
+    plt.close()
 
 def filter_list(inputList, key, allowedVals):
     filtered = [x[key] for x in inputList if x[key] in allowedVals]
@@ -52,3 +57,8 @@ def arr2d_to_3d(arr):
     arr = np.expand_dims(np.asarray(arr), -1)
     arr = np.repeat(arr, 3, axis=-1)
     arr = np.repeat(arr, 3, axis=-1)
+
+def load_image_cv2(path):
+    img = cv2.imread(path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    return img

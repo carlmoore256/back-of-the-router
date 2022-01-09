@@ -130,6 +130,8 @@ dmypy.json
 
 generated/
 annotations/
+dataset/
+saved/
 
 val2017/
 stuff_val2017_pixelmaps/
@@ -139,3 +141,5 @@ stuff_val2017_pixelmaps/
 assets/*.json
 assets/*.png
 saved_generated/*.png
+
+annotations.ipynb

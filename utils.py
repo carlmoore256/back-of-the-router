@@ -1,3 +1,4 @@
+from curses import meta
 import numpy as np
 import matplotlib.pyplot as plt
 import json
@@ -5,6 +6,7 @@ import shutil
 import os
 import pickle
 import cv2
+import glob
 
 def print_pretty(data):
     print(json.dumps(data, indent=2))
@@ -62,3 +64,22 @@ def load_image_cv2(path):
     img = cv2.imread(path)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
+
+def save_asset_metadata_pair(path, image, metadata):
+    index = 0
+    while True:
+        png_path = os.path.join(path, f"{str(index)}.png")
+        json_path = os.path.join(path, f"{str(index)}.json")
+        if not os.path.isfile(png_path) and not os.path.isfile(json_path):
+            image.save(png_path)
+            save_json(json_path, metadata)
+            print(f"saved image and metadata pair: {png_path} {json_path}")
+            break
+        else:
+            index += 1
+
+    # all_pngs = glob.glob(f"{path}/*.png")
+    # all_jsons = glob.glob(f"{path}/*.json")
+
+# def generate_numbered_filename(path, ext):
+#     all_files = glob.glob(f"{path}/*{ext}")

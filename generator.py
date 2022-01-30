@@ -4,7 +4,7 @@ from PIL import Image
 # import torchvision.transforms.functional as TF
 from postprocessing import sharpen_image
 from pyramids import blend_masked_rgb
-from utils import load_dict, save_dict, filter_list, display_multiple_images
+from utils import load_dict, save_dict, filter_list, display_multiple_images, save_asset_metadata_pair
 from coco_utils import load_coco_info, load_coco_image, generate_assets, coco_value_distribution, closest_sized_annotation, print_generator_status, load_coco_obj
 from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent
 import numpy as np
@@ -60,6 +60,9 @@ class BOTR_Generator():
     elif annKey == "instance_ann":
       loc = self.meanAreaInstances * sizeScalar
       scale = self.stdAreaInstances * stdScalar
+    elif annKey == "any":
+      loc = ((self.meanAreaInstances + self.meanAreaStuff) / 2) * sizeScalar
+      scale = ((self.stdAreaInstances + self.stdAreaStuff) / 2) * stdScalar
     return np.random.normal(loc=loc, scale=scale, size=[1])
   
   # select an annotation from a gaussian distribution
@@ -90,6 +93,18 @@ class BOTR_Generator():
     # construct list of allowed values
     filtered = [v for k, v in annCategories.items() if k in allowedCategories]
     return filtered
+
+  # extends functionality to retrive both stuff and instances
+  def get_random_ann_list(self, ann_key):
+    randCoco = self.get_coco_example()
+    if ann_key == "any":
+      annList = randCoco["stuff_ann"]
+      annList += randCoco["instance_ann"]
+      return annList
+    else:
+      return randCoco[ann_key]
+
+
     
   def generate_image(self, config, imageProgress=False, printWarnings=False):
 
@@ -108,7 +123,14 @@ class BOTR_Generator():
     pbar = tqdm(total=config['targetFill'])
     while px_filled < config['targetFill']:
       randCoco = self.get_coco_example()
-      annList = randCoco[config['ann_key']]
+
+      if config['ann_key'] == "any":
+        annList = randCoco["stuff_ann"]
+        annList += randCoco["instance_ann"]
+      else:
+        annList = randCoco[config['ann_key']]
+
+      annList = self.get_random_ann_list(config['ann_key'])
       annList = self.filter_ann_categories(annList, config["allowedCategories"])
       
       if len(annList) == 0:
@@ -148,14 +170,8 @@ class BOTR_Generator():
           mask_A=exclusionMask, 
           mask_B=compositeMask,
           blendConfig=config['image_blending'])
-        # blendedComposite = blend_masked_rgb(
-        #   img_A=image.astype(float)/255,
-        #   img_B=composite.astype(float)/255, 
-        #   mask_A=exclusionMask, 
-        #   mask_B=compositeMask,
-        #   blendConfig=config['blendConfig'])
+
         composite = blendedComposite
-        # composite = np.clip(blendedComposite * 255, 0, 255).astype(np.uint8)
       else:
         # add the masked content on to the composite (inplace modify composite)
         composite = mask_add_composite(image, exclusionMask, composite)
@@ -181,7 +197,19 @@ class BOTR_Generator():
     pbar.close()
 
     composite = Image.fromarray(composite)
-    return composite, attributes
+    return composite, attributes  
+
+  # generates image, metadata, and descriptions
+  def generate_botr(self, config, outpath=None):
+    image, metadata = self.generate_image(config, imageProgress=False)
+    _, description = generate_zipf_description(metadata, sentence_len=random.randint(3, 14))
+    name = generate_name(metadata["category_percentage"])
+    metadata["name"] = name
+    metadata["description"] = description
+    if outpath is not None:
+      save_asset_metadata_pair(outpath, image, metadata)
+    return image, metadata
+
 
 
 def generate_zipf_description(metadata, sentence_len=10, plotDist=False):
@@ -238,18 +266,14 @@ def generate_name(metadata):
   name = ""
   attr_idx = 0
   while len(name) < word_len:
-      print(attr_idx)
       key = list(sorted_attrs.keys())[attr_idx]
       slice_len = int((sorted_attrs[key] * word_len) ** 2)
       if slice_len == 0:
           slice_len = 1
-      name += key[:slice_len]
+      offset = random.randint(0, len(key)-slice_len-1)
+      name += key[offset:offset+slice_len]
       attr_idx += 1
   return name
-
-
-
-
 
 # ===== old stuff ===============================
 

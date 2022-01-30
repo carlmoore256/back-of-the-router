@@ -143,3 +143,6 @@ assets/*.png
 saved_generated/*.png
 
 annotations.ipynb
+
+out/
+images/

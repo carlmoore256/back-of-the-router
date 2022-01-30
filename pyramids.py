@@ -127,6 +127,6 @@ def blend_masked_rgb(img_A, img_B,
         mask_A, mask_B, blendConfig)
     blended_rgb.append(blended)
   blended_rgb = np.stack(blended_rgb, axis=-1)
-  blended_rgb = normalize_values(blended_rgb)
+  # blended_rgb = normalize_values(blended_rgb)
   blended_rgb = to_uint8_range(blended_rgb)
   return blended_rgb

@@ -103,6 +103,7 @@ class BOTR_Generator():
     prev_px_filled = 0
     skipped = 0
 
+    # components = [] # save each component of the constructed image along the way
 
     pbar = tqdm(total=config['targetFill'])
     while px_filled < config['targetFill']:
@@ -153,7 +154,7 @@ class BOTR_Generator():
         #   mask_A=exclusionMask, 
         #   mask_B=compositeMask,
         #   blendConfig=config['blendConfig'])
-        composite = blendedComposite.copy()
+        composite = blendedComposite
         # composite = np.clip(blendedComposite * 255, 0, 255).astype(np.uint8)
       else:
         # add the masked content on to the composite (inplace modify composite)
@@ -182,26 +183,6 @@ class BOTR_Generator():
     composite = Image.fromarray(composite)
     return composite, attributes
 
-    # config = {
-    #   # average size of each patch (1 being mean of distribution)
-    #   'avgPatchSize' : 0.8,
-    #   # average size variance of each patch added
-    #   'avgPatchVariance' : 0.01,
-    #   # minimum area of a patch added, expressed as percentage px after masking
-    #   'minPatchArea' : 1e-4, 
-          # maxPatchArea
-    #   # target percentage of pixels to fill
-    #   'targetFill' : 0.99,
-    #   # output image size
-    #   'outputSize' : (512, 512),
-    #   # prevent supercategories from appearing
-    #   'allowedCategories' : ["person", "other"],
-    #   # choose either "stuff_ann" or "instances_ann"
-    #   'ann_key' : "stuff_ann",
-    #   # prevent supercategories from appearing
-    #   'disallowed_catg' : ["person", "other"],
-    #   # choose either "stuff_ann" or "instances_ann"
-    # }
 
 def generate_zipf_description(metadata, sentence_len=10, plotDist=False):
     descriptions = metadata.copy().pop("text_metadata")['descriptions']

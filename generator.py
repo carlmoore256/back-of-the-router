@@ -7,6 +7,7 @@ from pyramids import blend_masked_rgb
 from utils import load_dict, save_dict, filter_list, display_multiple_images, save_asset_metadata_pair
 from coco_utils import load_coco_info, load_coco_image, generate_assets, coco_value_distribution, closest_sized_annotation, print_generator_status, load_coco_obj
 from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent
+from wording import generate_name, zipf_description
 import numpy as np
 import os
 import random
@@ -105,7 +106,6 @@ class BOTR_Generator():
       return randCoco[ann_key]
 
 
-    
   def generate_image(self, config, imageProgress=False, printWarnings=False):
 
     composite = np.zeros((config["outputSize"][0], config["outputSize"][1],3), dtype=np.uint8)
@@ -202,227 +202,10 @@ class BOTR_Generator():
   # generates image, metadata, and descriptions
   def generate_botr(self, config, outpath=None):
     image, metadata = self.generate_image(config, imageProgress=False)
-    _, description = generate_zipf_description(metadata, sentence_len=random.randint(3, 14))
+    _, description = zipf_description(metadata, sentence_len=random.randint(3, 14))
     name = generate_name(metadata["category_percentage"])
     metadata["name"] = name
     metadata["description"] = description
     if outpath is not None:
       save_asset_metadata_pair(outpath, image, metadata)
     return image, metadata
-
-
-
-def generate_zipf_description(metadata, sentence_len=10, plotDist=False):
-    descriptions = metadata.copy().pop("text_metadata")['descriptions']
-
-    all_words = []
-    for d in descriptions:
-        words = []
-        for word in d.split():
-            word = word.lower().replace(".", "")
-            words.append(word)
-            if "." in word:
-                words.append("!")
-        all_words += words
-
-    zipf_chart = {k: 0 for k in list(set(all_words))}
-
-    for word in all_words:
-        zipf_chart[word] += 1
-    zipf_chart = dict(sorted(zipf_chart.items(), key=lambda item: item[1], reverse=True))
-
-    # generate distribution to pull from
-    dist = np.random.exponential(scale=1, size=sentence_len)
-    dist = ((dist - np.min(dist)) / (np.max(dist) - np.min(dist)) * (len(zipf_chart.keys())-1)).astype(int)
-
-    if plotDist:
-        plt.title("zipz chart word occurences")
-        plt.hist(list(zipf_chart.values()), 50, density=True)
-        plt.show()
-        plt.title("exponential distribution")
-        count, bins, ignored = plt.hist(dist, 50, density = True)
-        plt.show()
-
-    sorted_zipf = list(zipf_chart.keys())    
-    sentence = [sorted_zipf[idx] for idx in dist]
-    str_sentence = ''
-    sentence_start = True
-    for word in sentence:
-        if sentence_start:
-            str_sentence += f"{word[0].upper()}{word[1:]}" + " "
-            sentence_start = False
-        else:
-            if word == ".":
-                sentence_start = True
-            str_sentence += word + " "
-    return sentence, str_sentence
-
-# def attribute_map(category_map)
-# attributes = {cat["supercategory"]: 0 for cat in category_map.values()}
-
-def generate_name(metadata):
-  word_len = np.random.randint(3, 20)
-  sorted_attrs = dict(sorted(metadata.items(), key=lambda item: item[1], reverse=True))
-  name = ""
-  attr_idx = 0
-  while len(name) < word_len:
-      key = list(sorted_attrs.keys())[attr_idx]
-      slice_len = int((sorted_attrs[key] * word_len) ** 2)
-      if slice_len == 0:
-          slice_len = 1
-      offset = random.randint(0, len(key)-slice_len-1)
-      name += key[offset:offset+slice_len]
-      attr_idx += 1
-  return name
-
-# ===== old stuff ===============================
-
-
-def generate_single(
-  dataset, info, dims, 
-  fill_target=0.99, 
-  max_step_fill=0.1, 
-  step_fill_jitter = 0.3, 
-  sharpness=10, 
-  kernel_size=1,
-  kernel_sig=1, 
-  for_nn=False):
-  
-  transform = transforms.Compose(
-  [transforms.ToTensor(), 
-  transforms.Resize(size=dims),
-  transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-
-  unique_categories = list(set([k["supercategory"] for k in info['categories']]))
-
-  while True:
-    total_px_filled = 0
-    composite_mask = torch.zeros((dims[0], dims[1], 1))
-    composite = torch.zeros((dims[0], dims[1], 3))
-    # metadata = {}
-    metadata = {key: 0 for key in unique_categories}
-    map = {}
-    # name = ""
-
-    for cat in info['categories']:
-        map[cat['id']] = cat["supercategory"]
-
-    while total_px_filled / (dims[0] * dims[1]) < fill_target:
-      idx = np.random.randint(0, dataset.__len__())
-      img, ann = dataset[idx]
-      
-
-      rand_ann = random.choice(ann)
-      img = TF.resize(img, size=dims)
-      img = img.permute(1,2,0)
-      rand_mask = dataset.coco.annToMask(rand_ann)
-      rand_mask = torch.as_tensor(rand_mask).unsqueeze(0)
-      rand_mask = TF.resize(rand_mask, size=(dims[0], dims[1]))
-      rand_mask = torch.permute(rand_mask,(1,2,0))
-      px_filled = torch.count_nonzero(rand_mask).item()
-      fill_percent = px_filled / (dims[0] * dims[1])
-      # masked = img * rand_mask
-      category = map[rand_ann['category_id']]
-      fill_mask = torch.zeros_like(composite_mask)
-      fill_mask = torch.logical_or(rand_mask, composite_mask)
-      fill_mask[composite_mask == 1] = 0
-      px_filled = torch.count_nonzero(fill_mask).item()
-      fill_percent = px_filled / (dims[0] * dims[1])
-      this_step_fill = (torch.rand((1,)) * step_fill_jitter) + max_step_fill
-
-      if fill_percent > this_step_fill or fill_percent == 0:
-        continue
-      else:
-        category = map[rand_ann['category_id']]
-        metadata[category] += fill_percent
-        composite_mask = torch.logical_or(composite_mask, rand_mask)
-
-        composite = blend_masked_rgb(
-          img_A=img.numpy(), # use the image so the blending works with a wider area
-          img_B=composite.numpy(), 
-          mask_A=fill_mask.numpy(), 
-          mask_B=composite_mask.numpy(),
-          kernel_size=kernel_size,
-          kernel_sig=kernel_sig)
-
-        composite = torch.as_tensor(composite)
-        # composite += fill_mask * img
-        total_px_filled = torch.count_nonzero(composite_mask)
-        print(f'px filled {total_px_filled} fill percent {total_px_filled/(dims[0]*dims[1])}')
-        letters_category = int(((len(category)) * fill_percent)**4)
-        # name += category[:letters_category]
-
-    composite = sharpen_image(composite.permute(2, 0, 1), sharpness).permute(1, 2, 0)
-
-    composite = (composite - torch.min(composite)) / ((torch.max(composite) - torch.min(composite)))
-    if for_nn:
-      composite = composite.permute(2, 0, 1)
-
-    name = generate_name(metadata)
-    metadata["name"] = name
-    yield composite, metadata, name
-
-def botr_generator(dataset, annotations, dims, batch_size=4, fill_target=0.99, max_step_fill=0.1, step_fill_jitter = 0.3, for_nn=False):
-  transform = transforms.Compose(
-    [transforms.ToTensor(), 
-    transforms.Resize(size=dims),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-  while True:
-    img_batch = []
-    metadata_batch = []
-    b = 0
-    batch_ready = False
-    while not batch_ready:
-    # for b in range(batch_size):
-      px_filled = 0
-      composite_mask = torch.zeros((dims[0], dims[1], 1))
-      composite = torch.zeros((dims[0], dims[1], 3))
-      attr_list = []
-      while px_filled / (dims[0] * dims[1]) < fill_target:
-        idx = np.random.randint(0, dataset.__len__())
-        img, ann = dataset[idx]
-        rand_ann = random.choice(ann)
-        img = TF.resize(img, size=dims)
-        img = img.permute(1,2,0)
-        rand_mask = dataset.coco.annToMask(rand_ann)
-        rand_mask = torch.as_tensor(rand_mask).unsqueeze(0)
-        rand_mask = TF.resize(rand_mask, size=(dims[0], dims[1]))
-        rand_mask = torch.permute(rand_mask,(1,2,0))
-        fill_mask = torch.zeros_like(composite_mask)
-        fill_mask = torch.logical_or(rand_mask, composite_mask)
-        fill_mask[composite_mask == 1] = 0
-
-        px_filled = torch.count_nonzero(composite_mask)
-        fill_percent = px_filled / (dims[0] * dims[1])
-
-        this_step_fill = (torch.rand((1,)) * step_fill_jitter) + max_step_fill
-        if fill_percent > this_step_fill:
-          continue
-        else:
-          attr_list.append(ann)
-          # composite = blend_masked_rgb(composite.numpy(), img.numpy(), composite_mask.numpy(), fill_mask.numpy())
-          # composite = torch.as_tensor(composite)
-          # composite_mask = torch.logical_or(composite_mask, rand_mask)
-
-          px_filled = torch.count_nonzero(composite_mask)
-          composite_mask = torch.logical_or(composite_mask, rand_mask)
-          # px_filled = torch.count_nonzero(composite_mask)
-          composite += (fill_mask * img)
-      composite = (composite - torch.min(composite)) / ((torch.max(composite) - torch.min(composite)) + 1e-7)
-      if for_nn:
-        composite = composite.permute(2, 0, 1)
-
-      # FIX SO WHOLE ATTR LIST IS PUT INTO METADATA LIST
-      # if rand_ann["category_id"] - 100 in annotations.keys():
-      img_batch.append(composite)
-      # metadata = annotations[rand_ann["category_id"] - 100]
-      # metadata = annot
-      metadata_batch.append(metadata)
-      b += 1
-      if b == batch_size:
-        batch_ready = True
-    # else:
-    #   print(f"{rand_ann['category_id'] - 100} \n")
-
-    img_batch = torch.stack(img_batch)
-    yield img_batch, metadata_batch

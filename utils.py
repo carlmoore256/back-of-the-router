@@ -41,6 +41,11 @@ def save_json(path, data):
     with open(path, 'w', encoding='utf-8') as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
+def load_json(path):
+    f = open(path)
+    data = json.load(f)
+    return data
+    
 def copy_file(source, new_directory):
     destination = os.path.join(new_directory, os.path.split(source)[-1])
     shutil.copyfile(source, destination)
@@ -54,6 +59,9 @@ def load_dict(path='dataset/coco_organized.pickle'):
     with open(path, 'rb') as handle:
         dict_obj = pickle.load(handle)
     return dict_obj
+
+def sort_dict(data, reverse=True):
+    return dict(sorted(data.items(), key=lambda item: item[1], reverse=reverse))
 
 def arr2d_to_3d(arr):
     arr = np.expand_dims(np.asarray(arr), -1)

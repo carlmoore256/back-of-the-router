@@ -7,6 +7,10 @@ import os
 import pickle
 import cv2
 import glob
+# import urllib
+import requests
+from zipfile import ZipFile
+from tqdm import tqdm
 
 def print_pretty(data):
     print(json.dumps(data, indent=2))
@@ -91,3 +95,42 @@ def save_asset_metadata_pair(path, image, metadata):
 
 # def generate_numbered_filename(path, ext):
 #     all_files = glob.glob(f"{path}/*{ext}")
+
+
+
+def download_file(url, output_path):
+    print(f'Downloading file {url}')
+    resp = requests.get(url, stream=True)
+    total = int(resp.headers.get('content-length', 0))
+    with open(output_path, 'wb') as file, tqdm(
+        desc=output_path,
+        total=total,
+        unit='iB',
+        unit_scale=True,
+        unit_divisor=1024,
+    ) as bar:
+        for data in resp.iter_content(chunk_size=1024):
+            size = file.write(data)
+            bar.update(size)
+
+    # urllib.urlretrieve(url, output_path)
+
+def unzip_file(file_path, output_path):
+    print(f'Unzipping {file_path}')
+    with ZipFile(file=file_path) as zip_file:
+        for file in tqdm(iterable=zip_file.namelist(), total=len(zip_file.namelist())):
+            zip_file.extract(member=file, path=output_path)
+
+def remove_file(file_path):
+    os.remove(file_path)
+    print(f'Removed {file_path}')
+
+def check_make_path(path):
+    if not os.path.exists(path):
+        os.mkdir(path)
+        print(f"made directory {path}")
+    
+
+    # with zipfile.ZipFile(file_path, 'r') as zip_ref:
+    #     zip_ref.extractall(output_path)
+

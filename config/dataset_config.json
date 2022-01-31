@@ -1,0 +1,19 @@
+{
+    "base_path" : "data/",
+    "temp_path" : "temp/",
+    "downloads" : {
+        "train2017.zip" : "http://images.cocodataset.org/zips/train2017.zip",
+        "stuff_annotations_trainval2017.zip" : "http://images.cocodataset.org/annotations/stuff_annotations_trainval2017.zip",
+        "annotations_trainval2017.zip" : "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
+    },
+    "annotations" : {
+        "instances" : "annotations/instances_train2017.json",
+        "stuff" : "annotations/stuff_train2017.json",
+        "captions" : "annotations/captions_train2017.json"
+    },
+    "saved-subsets" : {
+        "coco_organized" : "coco_organized.pickle",
+        "category_map" : "category_map.pickle"
+    }
+
+}

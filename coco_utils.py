@@ -1,13 +1,13 @@
 # from utils import load_coco_info
-import numpy as np
+from utils import save_dict, load_dict, load_json
+from env import DATASET_CONFIG
 from pycocotools.coco import COCO
-import matplotlib.pyplot as plt
-from collections import OrderedDict
+from PIL import Image, ImageOps
+import numpy as np
+import pickle
 import json
 import os
-from PIL import Image, ImageOps
-import pickle
-from utils import save_dict, load_dict, print_pretty
+
 
 def all_category_names(dataset_path="dataset/", exclude=[]):
     pathCatMap = os.path.join(dataset_path, "category_map.pickle")
@@ -140,15 +140,20 @@ def coco_value_distribution(coco_dataset, key="stuff_ann", val_key="area"):
 def print_generator_status(attributes, percentFill, skipped):
     print(f'filled {percentFill}% skipped {skipped}')
 
-def generate_assets(base_path):
-    coco_instances = COCO(f"{base_path}/annotations/instances_train2017.json")
-    coco_stuff = COCO(f"{base_path}/annotations/stuff_train2017.json")
-    coco_captions = load_coco_info(f"{base_path}/annotations/captions_train2017.json")
+def generate_assets():
+    config = load_json(DATASET_CONFIG)
+    coco_instances = COCO(os.path.join(config["base_path"], config["instances"]))
+    coco_stuff = COCO(os.path.join(config["base_path"], config["stuff"]))
+    coco_captions = load_coco_info(os.path.join(config["base_path"], config["captions"]))
+
+    # coco_instances = COCO(f"{base_path}/annotations/instances_train2017.json")
+    # coco_stuff = COCO(f"{base_path}/annotations/stuff_train2017.json")
+    # coco_captions = load_coco_info(f"{base_path}/annotations/captions_train2017.json")
 
     sorted_coco = sort_coco(coco_stuff, coco_instances, coco_captions)
-    save_dict(sorted_coco, path=f'{base_path}/coco_organized.pickle')
-    category_map(coco_stuff, coco_instances, save_path=f'{base_path}/category_map.pickle')
+    save_dict(sorted_coco, os.path.join(config["base_path"], config["coco_organized"]))
+    category_map(coco_stuff, coco_instances, save_path=os.path.join(config["base_path"], config["category_map"]))
 
 # sort coco dataset in desired BOTR format, serialize and save
 if __name__ == "__main__":
-    generate_assets("dataset/")
+    generate_assets()

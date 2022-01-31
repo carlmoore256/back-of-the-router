@@ -17,7 +17,7 @@ from tqdm import tqdm
 # a class that can remain loaded, and change aspects
 # of generative properties
 class BOTR_Generator():
-  # ADD METHOD TO FILTER OUT VALID LICENSES!
+  
   def __init__(self, dataset_path="dataset/"):
 
     pathCatMap = os.path.join(dataset_path, "category_map.pickle")
@@ -202,10 +202,10 @@ class BOTR_Generator():
   # generates image, metadata, and descriptions
   def generate_botr(self, config, outpath=None):
     image, metadata = self.generate_image(config, imageProgress=False)
-    _, description = zipf_description(metadata, sentence_len=random.randint(3, 14))
-    name = generate_name(metadata["category_percentage"])
-    metadata["name"] = name
-    metadata["description"] = description
-    if outpath is not None:
-      save_asset_metadata_pair(outpath, image, metadata)
+    # _, description = zipf_description(metadata, sentence_len=random.randint(3, 14))
+    # name = generate_name(metadata["category_percentage"])
+    # metadata["name"] = name
+    # metadata["description"] = description
+    # if outpath is not None:
+    #   save_asset_metadata_pair(outpath, image, metadata)
     return image, metadata

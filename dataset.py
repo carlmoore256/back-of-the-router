@@ -18,7 +18,7 @@ class Dataset():
         check_missing_assets()
 
         # load these as previously saved objects
-        self.coco_examples = load_asset("saved-objects", "coco_organized")
+        self.coco_examples = load_asset("saved-objects", "coco_safe_licenses")
         self.cocoCaptions = load_coco_obj("captions")
 
         self.all_ids = list(self.coco_examples.keys())

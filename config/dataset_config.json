@@ -14,7 +14,7 @@
             "captions" : "annotations/captions_train2017.json"
         },
         "saved-objects" : {
-            "coco_organized" : "coco_organized.pickle"
+            "coco_safe_licenses" : "coco-safe-licenses.pickle"
         }
     },
     "filters" :

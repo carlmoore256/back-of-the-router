@@ -55,7 +55,7 @@ def copy_file(source, new_directory):
     shutil.copyfile(source, destination)
     print(f'copied {source} to {destination}')
 
-def save_dict(dict_obj, path):
+def save_object(dict_obj, path):
     with open(path, 'wb') as handle:
         pickle.dump(dict_obj, handle, protocol=pickle.HIGHEST_PROTOCOL)
 

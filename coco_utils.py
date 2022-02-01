@@ -1,5 +1,5 @@
 # from utils import load_coco_info
-from utils import save_dict, load_dict, load_json, save_json, filter_dict_by
+from utils import save_object, load_dict, load_json, save_json, filter_dict_by
 from config import DATASET_CONFIG, SUPERCATEGORIES
 from pycocotools.coco import COCO
 from PIL import Image, ImageOps
@@ -142,6 +142,8 @@ def print_generator_status(attributes, percentFill, skipped):
     print(f'filled {percentFill}% skipped {skipped}')
 
 def asset_path(asset_categ : str, asset_name : str):
+    if asset_name not in DATASET_CONFIG["assets"][asset_categ].keys():
+        DATASET_CONFIG["assets"][asset_categ][asset_name] = f'{asset_name}.json'
     return os.path.join(DATASET_CONFIG["base_path"], DATASET_CONFIG["assets"][asset_categ][asset_name])
 
 def load_asset(asset_categ : str, asset_name : str):
@@ -170,16 +172,15 @@ def generate_assets():
 
     for filter, values in DATASET_CONFIG["filters"].items():
         print(f'=> filtering coco by {filter}, allowed values: {values}')
-        sorted_coco = filter_dict_by(sorted_coco, filter, values)
+        filtered_coco = filter_dict_by(sorted_coco, filter, values)
 
     # saved a sorted and filtered set of coco objects
-    save_dict(sorted_coco, asset_path("saved-objects", "coco_organized"))
+    save_object(filtered_coco, asset_path("saved-objects", "coco-safe-licenses"))
     
     # save the mapping of categories
     if not os.path.isfile(DATASET_CONFIG["category_map"]):
-        cat_map = category_map(coco_stuff, coco_instances)
-        
-        save_dict(cat_map, DATASET_CONFIG["category_map"])
+        cat_map = category_map(coco_stuff, coco_instances) 
+        save_object(cat_map, DATASET_CONFIG["category_map"])
 
 # sort coco dataset in desired BOTR format, serialize and save
 if __name__ == "__main__":

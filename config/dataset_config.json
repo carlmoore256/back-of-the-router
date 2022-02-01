@@ -15,9 +15,6 @@
         "saved-objects" : {
             "coco_organized" : "coco_organized.pickle",
             "category_map" : "category_map.pickle"
-        },
-        "info" : {
-            "supercategories" : "supercategories.json"
         }
     },
     "filters" :

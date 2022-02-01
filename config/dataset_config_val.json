@@ -16,5 +16,9 @@
             "coco_organized" : "coco_organized.pickle",
             "category_map" : "category_map.pickle"
         }
+    },
+    "filters" :
+    {
+        "license_id" : [4, 5, 7]
     }
 }

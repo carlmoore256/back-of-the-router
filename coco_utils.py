@@ -79,13 +79,13 @@ def sort_coco(coco_stuff, coco_instances, coco_captions):
         }
     return coco_images
 
-def category_map(coco_stuff, coco_instances, save_path="dataset/category_map.pickle"):
+def category_map(coco_stuff, coco_instances):
     category_map = {}
     for cat in coco_stuff.dataset['categories']:
         category_map[cat['id']] = cat
     for cat in coco_instances.dataset['categories']:
         category_map[cat['id']] = cat
-    save_dict(category_map, save_path)
+    return category_map
     
 def load_coco_info(path="annotations/stuff_val2017.json"):
     with open(path,'r') as COCO:
@@ -173,9 +173,14 @@ def generate_assets():
         print(f'=> filtering coco by {filter}, allowed values: {values}')
         sorted_coco = filter_dict_by(sorted_coco, filter, values)
 
+    # saved a sorted and filtered set of coco objects
     save_dict(sorted_coco, asset_path("saved-objects", "coco_organized"))
-    category_map(coco_stuff, coco_instances, save_path=asset_path("saved-objects", "category_map"))
-    save_json(asset_path("info", "supercategories"), all_category_names())
+    
+    # save the mapping of categories
+    cat_map = category_map(coco_stuff, coco_instances)
+    save_dict(cat_map, asset_path("saved-objects", "category_map"))
+
+    # save_json(asset_path("info", "supercategories"), all_category_names())
 
 # sort coco dataset in desired BOTR format, serialize and save
 if __name__ == "__main__":

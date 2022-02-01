@@ -111,7 +111,7 @@ def load_coco_image(filename, path="dataset/train2017", fit=None, asarray=True):
     return img
 
 def load_coco_obj(asset_name):
-    filepath = DATASET_CONFIG["assets"]["annotations"][asset_name]
+    filepath = asset_path("annotations", asset_name)
     print(f'=> loading coco object - {filepath}')
     return COCO(filepath)
 

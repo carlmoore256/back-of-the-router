@@ -4,7 +4,7 @@ from PIL import Image
 # import torchvision.transforms.functional as TF
 from postprocessing import sharpen_image
 from pyramids import blend_masked_rgb
-from utils import load_dict, save_dict, filter_list, display_multiple_images, save_asset_metadata_pair
+from utils import load_dict, save_object, filter_list, display_multiple_images, save_asset_metadata_pair
 from coco_utils import load_coco_info, load_coco_image, generate_assets, coco_value_distribution, closest_sized_annotation, print_generator_status, load_coco_obj
 from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent
 from dataset import Dataset, filter_annotation_categories, get_annotation_supercategory, create_attribute_dict

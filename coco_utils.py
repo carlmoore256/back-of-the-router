@@ -100,8 +100,11 @@ def load_coco_categories(path="annotations/stuff_val2017.json"):
     return categories_id
 
 def load_coco_image(filename, path="dataset/train2017", fit=None, asarray=True):
-    filepath = os.path.join(path, filename)
-    img = Image.open(filepath)
+    path = os.path.join(
+        DATASET_CONFIG["base_path"], 
+        DATASET_CONFIG["images"], 
+        filename)
+    img = Image.open(path)
     if fit is not None:
         img = ImageOps.fit(img, fit)
     if img.mode != "RGB":

@@ -13,11 +13,17 @@ def all_category_names(exclude=[]):
     names = SUPERCATEGORIES.copy()
     for e in exclude:
         names.remove(e)
-    # category_map = load_asset("saved-objects", "category_map")
-    # names = list(set([cat['supercategory'] for cat in category_map.values()]))
-    # for e in exclude:
-    #     names.remove(e)
     return names
+
+def category_map(coco_stuff, coco_instances):
+    category_map = {}
+    for cat in coco_stuff.dataset['categories']:
+        category_map[cat['id']] = cat
+    for cat in coco_instances.dataset['categories']:
+        category_map[cat['id']] = cat
+    category_map = dict(
+        sorted(category_map.items(), key=lambda item: item[1]["id"], reverse=False))
+    return category_map
 
 def sort_coco(coco_stuff, coco_instances, coco_captions):
     avail_caption_imgs = get_available_images(coco_captions['annotations'])
@@ -79,13 +85,6 @@ def sort_coco(coco_stuff, coco_instances, coco_captions):
         }
     return coco_images
 
-def category_map(coco_stuff, coco_instances):
-    category_map = {}
-    for cat in coco_stuff.dataset['categories']:
-        category_map[cat['id']] = cat
-    for cat in coco_instances.dataset['categories']:
-        category_map[cat['id']] = cat
-    return category_map
     
 def load_coco_info(path="annotations/stuff_val2017.json"):
     with open(path,'r') as COCO:
@@ -177,10 +176,10 @@ def generate_assets():
     save_dict(sorted_coco, asset_path("saved-objects", "coco_organized"))
     
     # save the mapping of categories
-    cat_map = category_map(coco_stuff, coco_instances)
-    save_dict(cat_map, asset_path("saved-objects", "category_map"))
-
-    # save_json(asset_path("info", "supercategories"), all_category_names())
+    if not os.path.isfile(DATASET_CONFIG["category_map"]):
+        cat_map = category_map(coco_stuff, coco_instances)
+        
+        save_dict(cat_map, DATASET_CONFIG["category_map"])
 
 # sort coco dataset in desired BOTR format, serialize and save
 if __name__ == "__main__":

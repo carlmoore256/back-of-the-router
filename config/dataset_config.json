@@ -1,6 +1,7 @@
 {
     "base_path" : "dataset/",
     "temp_path" : "temp/",
+    "category_map" : "info/category_map.json",
     "downloads" : {
         "train2017.zip" : "http://images.cocodataset.org/zips/train2017.zip",
         "stuff_annotations_trainval2017.zip" : "http://images.cocodataset.org/annotations/stuff_annotations_trainval2017.zip",
@@ -13,8 +14,7 @@
             "captions" : "annotations/captions_train2017.json"
         },
         "saved-objects" : {
-            "coco_organized" : "coco_organized.pickle",
-            "category_map" : "category_map.pickle"
+            "coco_organized" : "coco_organized.pickle"
         }
     },
     "filters" :

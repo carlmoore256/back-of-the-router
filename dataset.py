@@ -9,7 +9,7 @@ import random
 import os
 
 # this can be global
-COCO_CATEGORIES = load_asset("saved-objects", "category_map")
+COCO_CATEGORIES = load_json(DATASET_CONFIG["category_map"])
 
 class Dataset():
 

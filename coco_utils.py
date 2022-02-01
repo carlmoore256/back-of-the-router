@@ -143,7 +143,7 @@ def print_generator_status(attributes, percentFill, skipped):
 
 def asset_path(asset_categ : str, asset_name : str):
     if asset_name not in DATASET_CONFIG["assets"][asset_categ].keys():
-        DATASET_CONFIG["assets"][asset_categ][asset_name] = f'{asset_name}.json'
+        DATASET_CONFIG["assets"][asset_categ][asset_name] = f'{asset_name}.pickle'
     return os.path.join(DATASET_CONFIG["base_path"], DATASET_CONFIG["assets"][asset_categ][asset_name])
 
 def load_asset(asset_categ : str, asset_name : str):

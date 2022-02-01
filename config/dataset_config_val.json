@@ -14,7 +14,7 @@
             "captions" : "annotations/captions_val2017.json"
         },
         "saved-objects" : {
-            "coco_filtered_licenses" : "coco_filtered_licenses.pickle"
+            "coco_safe_licenses" : "coco-safe-licenses.pickle"
         }
     },
     "filters" :

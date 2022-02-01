@@ -1,6 +1,6 @@
 # from utils import load_coco_info
-from utils import save_dict, load_dict, load_json
-from env import DATASET_CONFIG
+from utils import save_dict, load_dict, load_json, save_json, filter_dict_by
+from config import DATASET_CONFIG
 from pycocotools.coco import COCO
 from PIL import Image, ImageOps
 import numpy as np
@@ -9,11 +9,8 @@ import json
 import os
 
 
-def all_category_names(dataset_path="dataset/", exclude=[]):
-    pathCatMap = os.path.join(dataset_path, "category_map.pickle")
-    if not os.path.isfile(pathCatMap):
-      generate_assets(dataset_path)
-    category_map = load_dict(pathCatMap)
+def all_category_names(exclude=[]):
+    category_map = load_asset("saved-objects", "category_map")
     names = list(set([cat['supercategory'] for cat in category_map.values()]))
     for e in exclude:
         names.remove(e)
@@ -111,8 +108,10 @@ def load_coco_image(filename, path="dataset/train2017", fit=None, asarray=True):
         img = np.asarray(img)
     return img
 
-def load_coco_obj(path):
-    return COCO(path)
+def load_coco_obj(asset_name):
+    filepath = DATASET_CONFIG["assets"]["annotations"][asset_name]
+    print(f'=> loading coco object - {filepath}')
+    return COCO(filepath)
 
 def get_available_images(annotations):
     return sorted(list(set(([key['image_id'] for key in annotations]))))
@@ -140,19 +139,40 @@ def coco_value_distribution(coco_dataset, key="stuff_ann", val_key="area"):
 def print_generator_status(attributes, percentFill, skipped):
     print(f'filled {percentFill}% skipped {skipped}')
 
-def generate_assets():
-    config = load_json(DATASET_CONFIG)
-    coco_instances = COCO(os.path.join(config["base_path"], config["instances"]))
-    coco_stuff = COCO(os.path.join(config["base_path"], config["stuff"]))
-    coco_captions = load_coco_info(os.path.join(config["base_path"], config["captions"]))
+def asset_path(asset_categ : str, asset_name : str):
+    return os.path.join(DATASET_CONFIG["base_path"], DATASET_CONFIG["assets"][asset_categ][asset_name])
 
-    # coco_instances = COCO(f"{base_path}/annotations/instances_train2017.json")
-    # coco_stuff = COCO(f"{base_path}/annotations/stuff_train2017.json")
-    # coco_captions = load_coco_info(f"{base_path}/annotations/captions_train2017.json")
+def load_asset(asset_categ : str, asset_name : str):
+    filepath = asset_path(asset_categ, asset_name)
+    if not os.path.isfile(filepath):
+        print(f'[!] {filepath} not found, generating asset!')
+        generate_assets()
+    print(f'=> loading coco asset: {filepath}')
+    return load_dict(filepath)
+
+def check_missing_assets():
+    for categ_key, categ_items in DATASET_CONFIG["assets"].items():
+        for name_key, _ in categ_items.items():
+            filepath = asset_path(categ_key, name_key)
+            if not os.path.isfile(filepath):
+                print(f'[!] {filepath} not found, generating asset!')
+                generate_assets()
+                break
+
+def generate_assets():
+    coco_instances = COCO(asset_path("annotations", "instances"))
+    coco_stuff = COCO(asset_path("annotations", "stuff"))
+    coco_captions = load_coco_info(asset_path("annotations", "captions"))
 
     sorted_coco = sort_coco(coco_stuff, coco_instances, coco_captions)
-    save_dict(sorted_coco, os.path.join(config["base_path"], config["coco_organized"]))
-    category_map(coco_stuff, coco_instances, save_path=os.path.join(config["base_path"], config["category_map"]))
+
+    for filter, values in DATASET_CONFIG["filters"].items():
+        print(f'=> filtering coco by {filter}, allowed values: {values}')
+        sorted_coco = filter_dict_by(sorted_coco, filter, values)
+
+    save_dict(sorted_coco, asset_path("saved-objects", "coco_organized"))
+    category_map(coco_stuff, coco_instances, save_path=asset_path("saved-objects", "category_map"))
+    save_json(asset_path("info", "supercategories"), all_category_names())
 
 # sort coco dataset in desired BOTR format, serialize and save
 if __name__ == "__main__":

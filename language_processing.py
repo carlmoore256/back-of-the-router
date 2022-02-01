@@ -3,7 +3,7 @@ import numpy as np
 from utils import sort_dict
 
 def generate_name(metadata):
-  word_len = random.randint(3, 20)
+  word_len = random.randint(5, 20)
   sorted_attrs = dict(sorted(metadata.items(), key=lambda item: item[1], reverse=True))
   name = ""
   attr_idx = 0
@@ -11,9 +11,8 @@ def generate_name(metadata):
       key = list(sorted_attrs.keys())[attr_idx]
       slice_len = int((sorted_attrs[key] * word_len) ** 2)
       if slice_len == 0:
-          slice_len = 1
-      offset = random.randint(0, len(key)-slice_len-1)
-      name += key[offset:offset+slice_len]
+        slice_len = 1
+      name += key[:slice_len]
       attr_idx += 1
   return name
 

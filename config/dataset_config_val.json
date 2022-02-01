@@ -1,27 +1,20 @@
 {
-    "base_path" : "dataset/",
+    "base_path" : "data_DELETE/",
     "temp_path" : "temp/",
     "downloads" : {
-        "train2017.zip" : "http://images.cocodataset.org/zips/train2017.zip",
+        "val2017.zip" : "http://images.cocodataset.org/zips/val2017.zip",
         "stuff_annotations_trainval2017.zip" : "http://images.cocodataset.org/annotations/stuff_annotations_trainval2017.zip",
         "annotations_trainval2017.zip" : "http://images.cocodataset.org/annotations/annotations_trainval2017.zip"
     },
     "assets" : {
         "annotations" : {
-            "instances" : "annotations/instances_train2017.json",
-            "stuff" : "annotations/stuff_train2017.json",
-            "captions" : "annotations/captions_train2017.json"
+            "instances" : "annotations/instances_val2017.json",
+            "stuff" : "annotations/stuff_val2017.json",
+            "captions" : "annotations/captions_val2017.json"
         },
         "saved-objects" : {
             "coco_organized" : "coco_organized.pickle",
             "category_map" : "category_map.pickle"
-        },
-        "info" : {
-            "supercategories" : "supercategories.json"
         }
-    },
-    "filters" :
-    {
-        "license_id" : [4, 5, 7]
     }
 }

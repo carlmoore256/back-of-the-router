@@ -67,6 +67,9 @@ def load_dict(path='dataset/coco_organized.pickle'):
 def sort_dict(data, reverse=True):
     return dict(sorted(data.items(), key=lambda item: item[1], reverse=reverse))
 
+def filter_dict_by(data, key, allowed_vals):
+    return dict(filter(lambda elem: elem[1][key] in allowed_vals, data.items()))
+
 def arr2d_to_3d(arr):
     arr = np.expand_dims(np.asarray(arr), -1)
     arr = np.repeat(arr, 3, axis=-1)

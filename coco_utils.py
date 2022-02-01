@@ -1,6 +1,6 @@
 # from utils import load_coco_info
 from utils import save_dict, load_dict, load_json, save_json, filter_dict_by
-from config import DATASET_CONFIG
+from config import DATASET_CONFIG, SUPERCATEGORIES
 from pycocotools.coco import COCO
 from PIL import Image, ImageOps
 import numpy as np
@@ -10,10 +10,13 @@ import os
 
 
 def all_category_names(exclude=[]):
-    category_map = load_asset("saved-objects", "category_map")
-    names = list(set([cat['supercategory'] for cat in category_map.values()]))
+    names = SUPERCATEGORIES.copy()
     for e in exclude:
         names.remove(e)
+    # category_map = load_asset("saved-objects", "category_map")
+    # names = list(set([cat['supercategory'] for cat in category_map.values()]))
+    # for e in exclude:
+    #     names.remove(e)
     return names
 
 def sort_coco(coco_stuff, coco_instances, coco_captions):

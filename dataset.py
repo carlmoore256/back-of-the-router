@@ -1,6 +1,8 @@
 # contains functions for downloading the coco dataset
-from utils import download_file, unzip_file, load_json, remove_file, check_make_path, print_pretty
+from tty import CC
+from utils import download_file, unzip_file, load_object, remove_file, check_make_path, print_pretty
 from coco_utils import generate_assets, check_missing_assets, coco_value_distribution, load_asset, load_coco_obj, closest_sized_annotation
+from coco_example import COCO_Example
 from config import DATASET_CONFIG
 
 import numpy as np
@@ -9,24 +11,34 @@ import random
 import os
 
 # this can be global
-COCO_CATEGORIES = load_json(DATASET_CONFIG["category_map"])
+COCO_CATEGORIES = load_object(DATASET_CONFIG["category_map"])
 
 class Dataset():
 
-    def __init__(self):
+    def __init__(self, subset="coco-safe-licenses"):
         # checks for all necessary dataset files
         check_missing_assets()
 
         # load these as previously saved objects
-        self.coco_examples = load_asset("saved-objects", "coco_safe_licenses")
+        self.coco_examples = load_asset("saved-objects", subset)
+        # initialize these objects in memory
+        # self.coco_examples = []
+        for k, v in self.coco_examples.items():
+            # replace the value with a COCO_Example object
+            self.coco_examples[k] = COCO_Example(v)
+            # try:
+            #     self.coco_examples.append(COCO_Example(example))
+            # except Exception as e:
+            #     print(e, example)
+
         self.cocoCaptions = load_coco_obj("captions")
 
         self.all_ids = list(self.coco_examples.keys())
 
         self.distStuff, self.meanAreaStuff, self.stdAreaStuff = coco_value_distribution(
-        self.coco_examples, key="stuff_ann", val_key="area")
+        self.coco_examples, key="stuff_ann")
         self.distInstances, self.meanAreaInstances, self.stdAreaInstances = coco_value_distribution(
-        self.coco_examples, key="instance_ann", val_key="area")
+        self.coco_examples, key="instance_ann")
 
     # get an example coco image, if no id is provided return a random one
     def get_coco_example(self, id=None):

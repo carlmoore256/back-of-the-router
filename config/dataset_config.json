@@ -1,7 +1,7 @@
 {
     "base_path" : "dataset/",
     "temp_path" : "temp/",
-    "category_map" : "info/category_map.json",
+    "category_map" : "info/category-map.pickle",
     "images" : "train2017",
     "downloads" : {
         "train2017.zip" : "http://images.cocodataset.org/zips/train2017.zip",

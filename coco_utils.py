@@ -1,5 +1,5 @@
 # from utils import load_coco_info
-from utils import save_object, load_dict, load_json, save_json, filter_dict_by
+from utils import save_object, load_object, load_json, save_json, filter_dict_by
 from config import DATASET_CONFIG, SUPERCATEGORIES
 from pycocotools.coco import COCO
 from PIL import Image, ImageOps
@@ -99,7 +99,7 @@ def load_coco_categories(path="annotations/stuff_val2017.json"):
         categories_id[cat['id']] = cat
     return categories_id
 
-def load_coco_image(filename, path="dataset/train2017", fit=None, asarray=True):
+def load_coco_image(filename, fit=None, asarray=True):
     path = os.path.join(
         DATASET_CONFIG["base_path"], 
         DATASET_CONFIG["images"], 
@@ -131,14 +131,11 @@ def closest_sized_annotation(annotationList, targetSize):
     return min(annotationList, key=lambda x: abs(targetSize - x['area']))
 
 # calculate global area distribution for fine grained control of patch sizes
-def coco_value_distribution(coco_dataset, key="stuff_ann", val_key="area"):
+def coco_value_distribution(coco_dataset, key="stuff_ann"):
     dist = []
     for coco in coco_dataset.values():
-        if key is None:
-            val = coco[val_key]
-        else:
-            val = [ann[val_key] for ann in coco[key]]
-        dist += val
+        vals = list(coco.sort_area(key).values())
+        dist += vals
     return dist, np.mean(dist), np.std(dist)
 
 def print_generator_status(attributes, percentFill, skipped):
@@ -155,7 +152,7 @@ def load_asset(asset_categ : str, asset_name : str):
         print(f'[!] {filepath} not found, generating asset!')
         generate_assets()
     print(f'=> loading coco asset: {filepath}')
-    return load_dict(filepath)
+    return load_object(filepath)
 
 def check_missing_assets():
     for categ_key, categ_items in DATASET_CONFIG["assets"].items():

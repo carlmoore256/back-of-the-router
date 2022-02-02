@@ -59,7 +59,7 @@ def save_object(dict_obj, path):
     with open(path, 'wb') as handle:
         pickle.dump(dict_obj, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
-def load_dict(path='dataset/coco_organized.pickle'):
+def load_object(path='dataset/coco_organized.pickle'):
     with open(path, 'rb') as handle:
         dict_obj = pickle.load(handle)
     return dict_obj

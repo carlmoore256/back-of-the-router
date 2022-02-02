@@ -148,3 +148,5 @@ out/
 images/
 data_VAL/
 notebooks/
+botr.ipynb
+EXAMPLE_ANN.json

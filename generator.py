@@ -1,28 +1,24 @@
-# from PIL.Image import composite, fromarray
-from PIL import Image
-# import torchvision.transforms as transforms
-# import torchvision.transforms.functional as TF
-from postprocessing import sharpen_image
-from pyramids import blend_masked_rgb
-from utils import load_dict, save_object, filter_list, display_multiple_images, save_asset_metadata_pair
-from coco_utils import load_coco_info, load_coco_image, generate_assets, coco_value_distribution, closest_sized_annotation, print_generator_status, load_coco_obj
-from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent
+from utils import display_multiple_images, save_asset_metadata_pair
+from coco_utils import load_coco_image, closest_sized_annotation
+from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent, mask_image
 from dataset import Dataset, filter_annotation_categories, get_annotation_supercategory, create_attribute_dict
 from language_processing import generate_name, zipf_description
+from postprocessing import sharpen_image
+from pyramids import blend_masked_rgb
 from config import GENERATOR_CONFIG_DEFAULT
+
+from PIL import Image
 from tqdm import tqdm
 import numpy as np
 import random
 
 
-# from env import DATASET_CONFIG
-
 # a class that can remain loaded, and change aspects
 # of generative properties
 class BOTR_Generator():
   
-  def __init__(self, dataset_path="dataset/"):
-    self.Dataset = Dataset()
+  def __init__(self, subset="coco-safe-licenses"):
+    self.Dataset = Dataset(subset)
   
   # select an annotation from a gaussian distribution
   def gaussian_select_patch(self, annList, annKey, avgSize=1., sizeVariance=1.):
@@ -34,17 +30,6 @@ class BOTR_Generator():
       return closest_sized_annotation(annList, sizeTarget)
     else:
       return annList[0]
-
-  # extends functionality to retrive both stuff and instances
-  def get_random_ann_list(self, ann_key):
-    randCoco = self.Dataset.get_coco_example()
-    if ann_key == "any":
-      annList = randCoco["stuff_ann"]
-      annList += randCoco["instance_ann"]
-      return annList
-    else:
-      return randCoco[ann_key]
-
 
   def generate_image(self, config, imageProgress=False, printWarnings=False):
 
@@ -59,18 +44,14 @@ class BOTR_Generator():
     skipped = 0
 
     # components = [] # save each component of the constructed image along the way
+    # botr = BOTR()
 
     pbar = tqdm(total=config['targetFill'])
     while px_filled < config['targetFill']:
-      randCoco = self.Dataset.get_coco_example()
+      cocoExample = self.Dataset.get_coco_example()
+      annList = cocoExample.get_annotation(config['ann_key'])
 
-      if config['ann_key'] == "any":
-        annList = randCoco["stuff_ann"]
-        annList += randCoco["instance_ann"]
-      else:
-        annList = randCoco[config['ann_key']]
-
-      annList = self.get_random_ann_list(config['ann_key'])
+      # annList = self.get_random_ann_list(config['ann_key'])
       annList = filter_annotation_categories(annList, config["allowedCategories"])
       
       if len(annList) == 0:
@@ -101,7 +82,8 @@ class BOTR_Generator():
         skipped+=1
         continue
 
-      image = load_coco_image(randCoco['filename'], fit=config['outputSize'])
+      # image = load_coco_image(cocoExample['filename'], fit=config['outputSize'])
+      image = cocoExample.load_image(fit=config['outputSize'])
 
       if config['image_blending']['use_blending']:
         blendedComposite = blend_masked_rgb(
@@ -130,14 +112,17 @@ class BOTR_Generator():
       
       # include which objects are filled
       attributes['text_metadata']['objects'].append(categName)
-      attributes['text_metadata']['descriptions'].append(randCoco['caption'])
-      # print_generator_status(attributes, px_filled, skipped)
+      attributes['text_metadata']['descriptions'].append(cocoExample.get_caption())
+
       pbar.update(px_filled-prev_px_filled)
       prev_px_filled = px_filled
     pbar.close()
 
     composite = Image.fromarray(composite)
-    return composite, attributes  
+    return composite, attributes
+
+  # def generate_botr_object(self, config=None, outpath=None):
+
 
   # generates image, metadata, and descriptions
   def generate_botr(self, config=None, outpath=None):
@@ -153,3 +138,13 @@ class BOTR_Generator():
     if outpath is not None:
       save_asset_metadata_pair(outpath, image, metadata)
     return image, metadata
+
+# an object that contains a generated botr
+class BOTR():
+  
+  def __init__(self):
+    self.layers = []
+    return
+  
+  def append_layer(self, layer):
+    self.layers.append(layer)

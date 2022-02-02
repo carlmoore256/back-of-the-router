@@ -18,9 +18,15 @@ def create_exclusion_mask(mask_A, mask_B, format_uint8=True):
     excl_mask = np.clip(excl_mask, 0, 1)    
   return excl_mask
 
-def mask_add_composite(source, mask, composite):
+def mask_image(source, mask):
     mask = np.clip(mask, 0, 1)
     masked = np.uint8(source * mask)
+    return masked
+
+def mask_add_composite(source, mask, composite):
+    masked = mask_image(source, mask)
+    # mask = np.clip(mask, 0, 1)
+    # masked = np.uint8(source * mask)
     # composite[exclusionMask > 0] += np.clip(image * exclusionMask, 0, 255).astype(np.uint8)
     composite = np.clip(composite + masked, 0, 255)
     return composite

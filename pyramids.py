@@ -45,16 +45,21 @@ def reconstruct(gaussian, laplacian, kernel):
   for l in L_up:
     recovered = interpolate(recovered, kernel) + l
   return recovered
+
 def dilate_mask(mask, kernel, iter=1):
   dilated = cv2.dilate(mask, kernel, iterations = iter)
   return dilated
+
+def clip_ranage(image):
+  image = np.clip(image, 0., 1.)
+  image = np.nan_to_num(image)
+  return image
 
 def blur_mask(mask, kernel, steps=1):
   for _ in range(steps):
     mask = convolve2d(
       mask, kernel, mode='same', boundary='fill')
-  mask = np.clip(mask, 0., 1.)
-  mask = np.nan_to_num(mask)
+  # mask = clip_ranage(mask)
   return mask
 
 def blend_masked(
@@ -84,7 +89,10 @@ def blend_masked(
     if blendConfig['blur_masks']:
       mask_A_scaled = blur_mask(mask_A_scaled, maskKernel, blendConfig['blur_iters'])
       mask_B_scaled = blur_mask(mask_B_scaled, maskKernel, blendConfig['blur_iters'])
-
+    
+    mask_A_scaled = clip_ranage(mask_A_scaled)
+    mask_B_scaled = clip_ranage(mask_B_scaled)
+    
     l_1 *= mask_A_scaled
     l_2 *= mask_B_scaled
     

@@ -1,7 +1,9 @@
 # contains functions for downloading the coco dataset
+from lib2to3.pgen2 import token
 from tty import CC
-from utils import download_file, unzip_file, load_object, remove_file, check_make_path, print_pretty
-from coco_utils import generate_assets, check_missing_assets, coco_value_distribution, load_asset, load_coco_obj, closest_sized_annotation
+from utils import download_file, unzip_file, load_object, save_object, remove_file, check_make_path, print_pretty
+from coco_utils import generate_assets, check_missing_assets, coco_value_distribution, load_asset, load_coco_obj, model_path
+from language_processing import tokenize_sentence, get_all_possible_tags
 from coco_example import COCO_Example
 from config import DATASET_CONFIG
 
@@ -40,6 +42,8 @@ class Dataset():
         self.distInstances, self.meanAreaInstances, self.stdAreaInstances = coco_value_distribution(
         self.coco_examples, key="instance_ann")
 
+        self.vocab_info = None
+
     # get an example coco image, if no id is provided return a random one
     def get_coco_example(self, id=None):
         if id == None:
@@ -63,15 +67,45 @@ class Dataset():
             scale = ((self.stdAreaInstances + self.stdAreaStuff) / 2) * stdScalar
         return np.random.normal(loc=loc, scale=scale, size=[1])
 
-    # extends functionality to retrive both stuff and instances
-    # def get_random_ann_list(self, ann_key):
-    #     randCoco = self.get_coco_example()
-    #     if ann_key == "any":
-    #         annList = randCoco["stuff_ann"]
-    #         annList += randCoco["instance_ann"]
-    #         return annList
-    #     else:
-    #         return randCoco[ann_key]
+    # get a set of all word occurences
+    def vocabulary(self):
+        sentences = [ex.get_caption() for idx, ex in enumerate(self)]
+        words = []
+        for s in sentences:
+            words += tokenize_sentence(s)
+        return list(set(words))
+
+    def get_vocab_info(self):
+        if self.vocab_info is None:
+            vocab_info = load_object(model_path("vocab_info"))
+            if vocab_info is None:
+                vocab_info = self.save_vocab_info()
+            self.vocab_info = vocab_info
+        return self.vocab_info
+
+    def save_vocab_info(self):
+        vocab = self.vocabulary()
+        all_tags, tag_to_id, id_to_tag = get_all_possible_tags(vocab)
+
+        word_to_id = {w: idx for (idx, w) in enumerate(vocab)}
+        id_to_word = {idx: w for (idx, w) in enumerate(vocab)}
+
+        vocab_info = {
+            "all_tags" : all_tags,
+            "tag_to_id" : tag_to_id,
+            "id_to_tag" : id_to_tag,
+            "vocabulary" : vocab,
+            "word_to_id" : word_to_id,
+            "id_to_word" : id_to_word }
+        save_object(vocab_info, model_path("vocab_info"))
+        return vocab_info
+
+    # extends functionality to torch.Dataset
+    def __getitem__(self, idx):
+        return self.coco_examples[self.all_ids[idx]]
+
+    def __len__(self):
+        return len(self.coco_examples)
 
 
 # generates an empty attribute dict
@@ -101,6 +135,7 @@ def download_dataset_archives(config):
         download_file(url, zip_path)
         unzip_file(zip_path, config["base_path"])
         remove_file(zip_path)
+
 
 if __name__ == "__main__":
     # parser = argparse.ArgumentParser(description='Initialize BOTR COCO Dataset')

@@ -18,6 +18,9 @@ def create_exclusion_mask(mask_A, mask_B, format_uint8=True):
     excl_mask = np.clip(excl_mask, 0, 1)    
   return excl_mask
 
+def add_images(imgA, imgB):
+  return np.clip(imgA + imgB, 0, 255)
+
 def mask_image(source, mask):
     mask = np.clip(mask, 0, 1)
     masked = np.uint8(source * mask)

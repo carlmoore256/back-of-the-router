@@ -150,3 +150,7 @@ data_VAL/
 notebooks/
 botr.ipynb
 EXAMPLE_ANN.json
+language_model.ipynb
+saved_models/
+temp/
+wandb/

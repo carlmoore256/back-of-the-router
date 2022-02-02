@@ -6,6 +6,7 @@
     "targetFill" : 0.99,
     "outputSize" : [512, 512],
     "ann_key" : "any",
+    "multichannelColorMatching" : true,
     "image_blending" : {
         "use_blending" : false,
         "pyr_kernel_size" : 5,

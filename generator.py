@@ -1,11 +1,14 @@
 from utils import display_multiple_images, save_asset_metadata_pair
 from coco_utils import load_coco_image, closest_sized_annotation
-from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent, mask_image
+from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent, add_images, mask_image
 from dataset import Dataset, filter_annotation_categories, get_annotation_supercategory, create_attribute_dict
 from language_processing import generate_name, zipf_description
-from postprocessing import sharpen_image
+from language_model import generate_description_lstm
+from postprocessing import sharpen_image, jpeg_decimation
 from pyramids import blend_masked_rgb
+from skimage.exposure import match_histograms
 from config import GENERATOR_CONFIG_DEFAULT
+from botr import BOTR
 
 from PIL import Image
 from tqdm import tqdm
@@ -31,6 +34,25 @@ class BOTR_Generator():
     else:
       return annList[0]
 
+#   import numpy as np
+# from skimage.io import imread, imsave
+# from skimage import exposure
+# from skimage.transform import match_histograms
+
+# # Load left and right images
+# L = imread('rocksA.png')
+# R = imread('rocksB.png')
+
+# # Match using the right side as reference
+# matched = match_histograms(L, R, multichannel=True)
+
+# # Place side-by-side and save
+# result = np.hstack((matched,R))
+# imsave('result.png',result)
+
+  # def match_histogram(reference, image, multichannel=True):
+
+
   def generate_image(self, config, imageProgress=False, printWarnings=False):
 
     composite = np.zeros((config["outputSize"][0], config["outputSize"][1],3), dtype=np.uint8)
@@ -44,7 +66,8 @@ class BOTR_Generator():
     skipped = 0
 
     # components = [] # save each component of the constructed image along the way
-    # botr = BOTR()
+    botr = BOTR()
+    referenceImg = None
 
     pbar = tqdm(total=config['targetFill'])
     while px_filled < config['targetFill']:
@@ -84,6 +107,12 @@ class BOTR_Generator():
 
       # image = load_coco_image(cocoExample['filename'], fit=config['outputSize'])
       image = cocoExample.load_image(fit=config['outputSize'])
+      image = np.asarray(jpeg_decimation(Image.fromarray(image), quality=config['jpeg_quality'], loops=1))
+
+      if referenceImg is None:
+        referenceImg = image # eventually have it as a global compromise
+      else:
+        image = match_histograms(image, referenceImg, channel_axis=config['multichannelColorMatching'])
 
       if config['image_blending']['use_blending']:
         blendedComposite = blend_masked_rgb(
@@ -97,6 +126,13 @@ class BOTR_Generator():
       else:
         # add the masked content on to the composite (inplace modify composite)
         composite = mask_add_composite(image, exclusionMask, composite)
+        # mask_image(source, mask)
+        # masked = mask_image(image, exclusionMask)
+        # masked = match_histograms(masked, referenceImg, multichannel=True)
+        # composite = add_images(masked, composite)
+        # .astype(np.uint8)
+      # composite = np.asarray(jpeg_decimation(Image.fromarray(composite), quality=config['jpeg_quality'], loops=1))
+
 
       compositeMask = np.logical_or(exclusionMask, compositeMask).astype(np.uint8)
       
@@ -113,16 +149,13 @@ class BOTR_Generator():
       # include which objects are filled
       attributes['text_metadata']['objects'].append(categName)
       attributes['text_metadata']['descriptions'].append(cocoExample.get_caption())
-
+      # print_generator_status(attributes, px_filled, skipped)
       pbar.update(px_filled-prev_px_filled)
       prev_px_filled = px_filled
     pbar.close()
 
-    composite = Image.fromarray(composite)
-    return composite, attributes
-
-  # def generate_botr_object(self, config=None, outpath=None):
-
+    composite = Image.fromarray(composite.astype(np.uint8))
+    return composite, attributes  
 
   # generates image, metadata, and descriptions
   def generate_botr(self, config=None, outpath=None):
@@ -131,7 +164,8 @@ class BOTR_Generator():
       config = GENERATOR_CONFIG_DEFAULT
 
     image, metadata = self.generate_image(config, imageProgress=False)
-    _, description = zipf_description(metadata, sentence_len=random.randint(3, 14))
+    description = generate_description_lstm(metadata)
+    # _, description = zipf_description(metadata, sentence_len=random.randint(3, 14))
     name = generate_name(metadata["category_percentage"])
     metadata["name"] = name
     metadata["description"] = description
@@ -139,12 +173,3 @@ class BOTR_Generator():
       save_asset_metadata_pair(outpath, image, metadata)
     return image, metadata
 
-# an object that contains a generated botr
-class BOTR():
-  
-  def __init__(self):
-    self.layers = []
-    return
-  
-  def append_layer(self, layer):
-    self.layers.append(layer)

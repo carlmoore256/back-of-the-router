@@ -3,13 +3,15 @@ from scipy.signal import convolve2d
 from utils import display_multiple_images
 import cv2
 
+LEVEL_STEP = 2
+
 def decimate(image, kernel):
   decimated = convolve2d(image, kernel, mode='same', boundary='wrap')
-  return decimated[::2, ::2]
+  return decimated[::LEVEL_STEP, ::LEVEL_STEP]
 
 def interpolate(image, kernel):
-  img_up = np.zeros((image.shape[0] * 2, image.shape[1] * 2))
-  img_up[::2, ::2] = image
+  img_up = np.zeros((image.shape[0] * LEVEL_STEP, image.shape[1] * LEVEL_STEP))
+  img_up[::LEVEL_STEP, ::LEVEL_STEP] = image
   return convolve2d(img_up, kernel, mode="same", boundary='wrap')
 
 # creates gaussian kernel with side length `l` and a sigma of `sig`
@@ -92,7 +94,7 @@ def blend_masked(
     
     mask_A_scaled = clip_ranage(mask_A_scaled)
     mask_B_scaled = clip_ranage(mask_B_scaled)
-    
+
     l_1 *= mask_A_scaled
     l_2 *= mask_B_scaled
     

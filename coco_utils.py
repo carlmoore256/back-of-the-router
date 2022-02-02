@@ -146,6 +146,10 @@ def asset_path(asset_categ : str, asset_name : str):
         DATASET_CONFIG["assets"][asset_categ][asset_name] = f'{asset_name}.pickle'
     return os.path.join(DATASET_CONFIG["base_path"], DATASET_CONFIG["assets"][asset_categ][asset_name])
 
+# where model related things are saved
+def model_path(key : str):
+    return os.path.join(DATASET_CONFIG['base_path'], DATASET_CONFIG['model'][key])
+
 def load_asset(asset_categ : str, asset_name : str):
     filepath = asset_path(asset_categ, asset_name)
     if not os.path.isfile(filepath):

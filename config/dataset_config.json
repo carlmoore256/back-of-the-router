@@ -21,5 +21,8 @@
     "filters" :
     {
         "license_id" : [4, 5, 7]
+    },
+    "model" : {
+        "vocab_info" : "model/vocab-info.pickle"
     }
 }

@@ -56,10 +56,16 @@ def copy_file(source, new_directory):
     print(f'copied {source} to {destination}')
 
 def save_object(dict_obj, path):
+    root_path = os.path.split(path)[0]
+    if not os.path.exists(root_path):
+        print(f'{root_path} does not exist, creating it')
+        os.mkdir(root_path)
     with open(path, 'wb') as handle:
         pickle.dump(dict_obj, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 def load_object(path='dataset/coco_organized.pickle'):
+    if not os.path.isfile(path):
+        return None
     with open(path, 'rb') as handle:
         dict_obj = pickle.load(handle)
     return dict_obj

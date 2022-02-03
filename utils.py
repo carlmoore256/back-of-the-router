@@ -105,7 +105,10 @@ def save_asset_metadata_pair(path, image, metadata):
 # def generate_numbered_filename(path, ext):
 #     all_files = glob.glob(f"{path}/*{ext}")
 
-
+def find_nearest(array, value):
+    array = np.asarray(array)
+    idx = (np.abs(array - value)).argmin()
+    return array[idx]
 
 def download_file(url, output_path):
     print(f'Downloading file {url}')

@@ -13,9 +13,8 @@ import random
 import wandb
 
 from dataset import Dataset
-from config import LSTM_LANGUAGE_CONFIG_PATH, LSTM_LANGUAGE_CONFIG_PATH
+from config import LSTM_CONFIG
 
-LSTM_CONFIG = load_json(LSTM_LANGUAGE_CONFIG_PATH)
 VOCAB_INFO = load_object(model_path("vocab_info"))
 
 EMBEDDING_DIM = 12
@@ -26,6 +25,7 @@ class LSTMTagger(nn.Module):
 
     def __init__(self, config, vocab_size, tagset_size):
         super(LSTMTagger, self).__init__()
+        
         self.hidden_dim = config["hidden_dim"]
         self.word_embeddings = nn.Embedding(vocab_size, config["embedding_dim"])
         # The LSTM takes word embeddings as inputs, and outputs hidden states
@@ -34,22 +34,31 @@ class LSTMTagger(nn.Module):
         # The linear layer that maps from hidden state space to tag space
         self.hidden2tag = nn.Linear(config["hidden_dim"], tagset_size)
 
-    def iterative_sentence(self, seed : str, loops : int = 10, corpus = None):
+    def generate(self, config):
+        config={"seed" : "A", "iters" : 5, "corpus" : None}
+        return self.iterative_sentence(config['seed'], config['iters'], config['corpus'])
+
+    def iterative_sentence(self, seed : str, iters : int = 10, corpus = None):
         x = torch.as_tensor(sentence_to_grammar_ids(seed))  
         words = []
         with torch.no_grad():
-            for _ in range(loops):
-                y_ = self(x)
-                grammar_ids = torch.argmax(y_, dim=1).detach().numpy()
-                batch_words = []
-                for id in grammar_ids:
-                    word = grammar_id_to_random_word(id, corpus)
-                    if word is None: # in this case use any word
-                        word = grammar_id_to_random_word(id)
-                    batch_words.append(word)
-                if len(batch_words) > 0:
-                    words += batch_words
-                    x = torch.as_tensor(words_to_grammar_ids( words[-random.randint(1, len(words)):] ))
+            for _ in range(iters):
+                try:
+                    y_ = self(x)
+                    grammar_ids = torch.argmax(y_, dim=1).detach().numpy()
+                    batch_words = []
+                    for id in grammar_ids:
+                        word = grammar_id_to_random_word(id, corpus)
+                        if word is None: # in this case use any word
+                            word = grammar_id_to_random_word(id)
+                        batch_words.append(word)
+                    if len(batch_words) > 0:
+                        words += batch_words
+                        # x = torch.as_tensor(words_to_grammar_ids( batch_words ))
+                        x = torch.as_tensor(words_to_grammar_ids( words[-random.randint(1, len(words)):] ), dtype=int)
+                except Exception as e:
+                    print(e)
+                    continue
             sentence = words_to_sentence(words)
         return sentence
 
@@ -60,7 +69,7 @@ class LSTMTagger(nn.Module):
         tag_scores = F.log_softmax(tag_space, dim=1)
         return tag_scores
 
-def generate_description_lstm(metadata, model_path=None, model_config=None):
+def generate_description_lstm(metadata, iters=3, model_path=None, model_config=None):
     corpus = get_corpus(metadata['text_metadata']['descriptions'])
 
     if model_config is None: # use default settings
@@ -76,10 +85,8 @@ def generate_description_lstm(metadata, model_path=None, model_config=None):
     seed = seed[:random.randint(0, int(len(seed)*0.5))]
     seed = combine_strings(seed)
 
-    description = model.iterative_sentence("A")
+    description = model.iterative_sentence(seed, iters=iters, corpus=corpus)
     return description
-
-# def test_language_model(mode, dataset, config):
 
 def train_language_model(model, dataset, config):
     criterion = nn.NLLLoss()

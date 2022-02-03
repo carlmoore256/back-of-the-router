@@ -12,6 +12,8 @@ class COCO_Example():
         self.areas_stuff = self.sort_area("stuff_ann")
         self.areas_all = self.sort_area("any")
 
+        # self.selected_layer = None
+
     def load_image(self, fit=None, asarray=True, resize=None):
         image = load_coco_image(
             filename=self.data["filename"], 
@@ -47,3 +49,11 @@ class COCO_Example():
 
     def get_caption(self):
         return self.data["caption"]
+
+    def get_annotation_center(self, ann):
+        box = ann["bbox"]
+        l_top_x = box[0]
+        l_top_y = box[1]
+        width = box[2]
+        height = box[3]
+        return [l_top_x + (width/2), l_top_y - (height/2)]

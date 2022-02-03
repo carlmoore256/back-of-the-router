@@ -2,7 +2,7 @@ import random
 import numpy as np
 from utils import sort_dict, load_object
 from coco_utils import model_path
-from nltk.tokenize import sent_tokenize, word_tokenize
+from nltk.tokenize import sent_tokenize, word_tokenize, sonority_sequencing
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
 from nltk import pos_tag
@@ -14,8 +14,9 @@ VOCAB_INFO = load_object(model_path("vocab_info"))
 TAGGED_VOCAB = pos_tag(VOCAB_INFO["vocabulary"])
 
 def generate_name(metadata):
+  data = metadata["category_percentage"]
   word_len = random.randint(5, 20)
-  sorted_attrs = dict(sorted(metadata.items(), key=lambda item: item[1], reverse=True))
+  sorted_attrs = dict(sorted(data.items(), key=lambda item: item[1], reverse=True))
   name = ""
   attr_idx = 0
   while len(name) < word_len:
@@ -87,7 +88,7 @@ def combine_strings(stringlist):
   return string
 
 def tokenize_sentence(sentence):
-  sentence_tokens = sent_tokenize(sentence)
+  # sentence_tokens = sent_tokenize(sentence)
   word_tokens = word_tokenize(sentence)
   return word_tokens
 
@@ -171,5 +172,11 @@ def words_to_sentence(words):
       sentence += w + " "
   return sentence
 
+
+def letters_to_ids(letters):
+  return [ord(letter) - 96 + 31 for letter in letters]
+
+def ids_to_letters(ids):
+  return [chr(id+96 - 31) for id in ids]
 
 

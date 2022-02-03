@@ -106,7 +106,7 @@ def load_coco_image(filename, fit=None, asarray=True):
         filename)
     img = Image.open(path)
     if fit is not None:
-        img = ImageOps.fit(img, fit)
+        img = ImageOps.fit(img, fit).convert('RGB')
     if img.mode != "RGB":
         img = img.convert('RGB')
     if asarray:

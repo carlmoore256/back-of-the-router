@@ -1,7 +1,7 @@
 {
     "base_path" : "data_VAL/",
     "temp_path" : "temp/",
-    "category_map" : "info/category_map.json",
+    "category_map" : "info/category-map.pickle",
     "images" : "val2017",
     "downloads" : {
         "val2017.zip" : "http://images.cocodataset.org/zips/val2017.zip",
@@ -15,11 +15,14 @@
             "captions" : "annotations/captions_val2017.json"
         },
         "saved-objects" : {
-            "coco_safe_licenses" : "coco-safe-licenses.pickle"
+            "coco_safe_licenses" : "coco-safe-licenses-val.pickle"
         }
     },
     "filters" :
     {
         "license_id" : [4, 5, 7]
+    },
+    "model" : {
+        "vocab_info" : "model/vocab-info.pickle"
     }
 }

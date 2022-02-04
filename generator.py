@@ -129,7 +129,8 @@ class BOTR_Generator():
         # add the masked content on to the composite (inplace modify composite)
         composite = mask_add_composite(image, exclusionMask, composite)
 
-      layer = BOTR_Layer(botr, cocoExample, chosenAnn, exclusionMask, compositeMask)
+      # layer = BOTR_Layer(botr, cocoExample, chosenAnn, exclusionMask, compositeMask)
+      layer = BOTR_Layer(botr, cocoExample, chosenAnn)
       botr.append_layer(layer)
 
       compositeMask = np.logical_or(exclusionMask, compositeMask).astype(np.uint8)

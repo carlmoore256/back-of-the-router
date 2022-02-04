@@ -8,6 +8,13 @@ import pickle
 import json
 import os
 
+def get_annotation_center(annotation):
+    box = annotation["bbox"]
+    l_top_x = box[0]
+    l_top_y = box[1]
+    width = box[2]
+    height = box[3]
+    return [l_top_x + (width/2), l_top_y - (height/2)]
 
 def all_category_names(exclude=[]):
     names = SUPERCATEGORIES.copy()

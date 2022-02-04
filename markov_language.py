@@ -3,7 +3,15 @@ import random
 
 class Markov(object):
 	
-	def __init__(self, corpus):
+	def __init__(self):
+		return
+		# self.cache = {}
+		# self.set_corpus(corpus)
+		# self.words = self.file_to_words()
+		# self.word_size = len(self.words)
+		# self.database()
+		
+	def set_corpus(self, corpus):
 		self.cache = {}
 		self.words = corpus
 		self.word_size = len(self.words)
@@ -29,10 +37,12 @@ class Markov(object):
 			else:
 				self.cache[key] = [w3]
 				
-	def generate(self, config):
-		size = config['size']
-		if config['corpus'] is not None:
-			self.words = config['corpus']
+	def generate(self, params, corpus):
+		size = params['length']
+		# if corpus is not None:
+
+		self.set_corpus(corpus)
+
 		seed = random.randint(0, self.word_size-3)
 		seed_word, next_word = self.words[seed], self.words[seed+1]
 		w1, w2 = seed_word, next_word

@@ -31,8 +31,8 @@ class Dataset():
         self.coco_examples, key="instance_ann")
 
     # get an example coco image, if no id is provided return a random one
-    def get_coco_example(self, id=None):
-        if id == None:
+    def get_coco_example(self, id: int=None) -> COCO_Example:
+        if id is None:
             id = random.choice(self.all_ids)
         return self.coco_examples[id]
 
@@ -96,13 +96,15 @@ class Dataset():
 # ===========================================================================
 
 # generates an empty attribute dict
-def create_attribute_dict():
-    attributes = {
-        "category_percentage": 
-        {   cat["supercategory"]: 0 for cat in COCO_CATEGORIES.values() }}
-    attributes['text_metadata'] = {
-        "objects" : [], "descriptions" : [] }
-    return attributes
+def composition_attributes():
+    return { cat["supercategory"]: 0 for cat in COCO_CATEGORIES.values() }
+    # attributes = {
+    #     "category_percentage": 
+    #     {   cat["supercategory"]: 0 for cat in COCO_CATEGORIES.values() }}
+    # return attributes
+
+    # attributes['text_metadata'] = {
+    #     "objects" : [], "descriptions" : [] }
 
 def get_annotation_supercategory(annotation):
     name = COCO_CATEGORIES[annotation["category_id"]]["supercategory"]

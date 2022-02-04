@@ -2,7 +2,7 @@ from PIL import ImageFilter, Image
 from config import DATASET_CONFIG
 import os
 import numpy as np
-from skimage.exposure import equalize_adapthist
+from skimage.exposure import equalize_adapthist, histogram
 
 def sharpen_image(image, loops=1):
   for l in range(loops):
@@ -30,4 +30,20 @@ def adaptive_hist(image, kernel_size=None, clip_limit=0.5, numpy=True):
     image = np.clip((image * 255).astype(np.uint8), 0, 255)
   return image
 
+def image_histogram(image, config=None):
+  if config is None:
+    config={'normalizeHistogram' : False, 'histogramChannelAxis' : -1}
+  try:
+    hist = histogram(image, 
+                    normalize=config['normalizeHistogram'],
+                    channel_axis=config['histogramChannelAxis'])[0]
+  except Exception as e:
+      print(f'[!] Histogram error: {e}')
+      return None
+  # add some handing of different sizes produced by histogram for whatever reason
+  if hist.shape[-1] < image.shape[0]:
+    hist = np.pad(hist, ((0,0),(0, image.shape[0] - hist.shape[-1])))
+  elif hist.shape[-1] > image.shape[0]:
+    hist = hist[:, :image.shape[0]]
+  return hist
 

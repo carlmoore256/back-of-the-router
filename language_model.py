@@ -34,9 +34,8 @@ class LSTMTagger(nn.Module):
         # The linear layer that maps from hidden state space to tag space
         self.hidden2tag = nn.Linear(config["hidden_dim"], tagset_size)
 
-    def generate(self, config):
-        config={"seed" : "A", "iters" : 5, "corpus" : None}
-        return self.iterative_sentence(config['seed'], config['iters'], config['corpus'])
+    def generate(self, params, corpus):
+        return self.iterative_sentence(params['seed'], params['iters'], corpus)
 
     def iterative_sentence(self, seed : str, iters : int = 10, corpus = None):
         x = torch.as_tensor(sentence_to_grammar_ids(seed))  

@@ -13,10 +13,9 @@ VOCAB_INFO = load_object(model_path("vocab_info"))
 
 TAGGED_VOCAB = pos_tag(VOCAB_INFO["vocabulary"])
 
-def generate_name(metadata):
-  data = metadata["category_percentage"]
+def generate_name(attributes: dict) -> str:
   word_len = random.randint(5, 20)
-  sorted_attrs = dict(sorted(data.items(), key=lambda item: item[1], reverse=True))
+  sorted_attrs = dict(sorted(attributes.items(), key=lambda item: item[1], reverse=True))
   name = ""
   attr_idx = 0
   while len(name) < word_len:

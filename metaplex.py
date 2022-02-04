@@ -1,14 +1,11 @@
 import json
 
-
-# convert attributes into list of dicts with trait_type: value format
-def format_attributes(dict_attrs):
+# changes a dictionary with values into the metaplex format:
+# [ {"trait_type" : "value"} , {}, ... ]
+def metaplex_attributes(data):
     attributes = []
-    for attr in dict_attrs:
-        
-        for k, v in attr.items():
-            attributes.append( {"trait_type": k, "value": v} )
-    return attributes
+    for k, v in data:
+        attributes.append({"trait_type" : k, "value" : v})
 
 def format_file_list(files):
     f_list = []
@@ -30,21 +27,29 @@ def format_royalties(creators, shares):
         })
     return c_list
 
+def format_botr_metaplex(botr_data, image_uri, animation_url, website_url="homunculi.org/art"):
+    formatted = {}
+    attributes = metaplex_attributes(botr_data['composition'])
+
+    
+
+    return formatted
+
 
 def generate_metadata(
-    name,
-    royalties, # generated with format_royalty_list
-    collection_name='',
-    symbol='',
-    description='',
-    image_file='',
-    animation_path='',
-    external_url='homunculi.org/art',
-    attributes=[],
-    files=[],
-    category='image',
-    collection_family='cymatic-cyborgues',
-    seller_fee_basis_points=0):
+    name = '',
+    symbol = '',
+    description = '',
+    seller_fee_basis_points = 0,
+    image_file = '',
+    animation_path = '',
+    external_url = 'homunculi.org/art',
+    attributes = [],
+    collection_name = '',
+    collection_family = 'Homunculi',
+    files = [],
+    category = 'image',
+    royalties = []):
 
     file_list = format_file_list(files)
 
@@ -71,20 +76,22 @@ def generate_metadata(
     return metadata
 
 if __name__ == "__main__":
+    royalties = format_royalties(
+        ["6TNtaPn8MEaBvekb7PzFnPTm6aTHdvFmSBoRznjETjXK"], [100])
     metadata = generate_metadata(
-        name,
-        royalties, # generated with format_royalty_list
-        collection_name='',
-        symbol='',
-        description='',
-        image_url='',
-        animation_url='',
-        external_url='homunculi.org/art',
-        attributes=[],
-        files=[],
-        category='image',
-        collection_family='cymatic-cyborgues',
-        seller_fee_basis_points=0)
+        name = '',
+        symbol = '',
+        description = '',
+        seller_fee_basis_points = 0,
+        image_file = '',
+        animation_path = '',
+        external_url = 'homunculi.org/art',
+        attributes = [],
+        collection_name = '',
+        collection_family = 'Homunculi',
+        files = [],
+        category = 'image',
+        royalties = royalties)
 
 # "attributes": [
 #     {

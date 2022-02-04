@@ -1,7 +1,9 @@
 from coco_utils import load_coco_image
 # from dataset import get_annotation_supercategory
 from utils import display_multiple_images, imshow, sort_dict
+# from dataset import get_annotation_supercategory
 import numpy as np
+import random
 
 class COCO_Example():
 
@@ -29,10 +31,15 @@ class COCO_Example():
     def sort_area(self, ann_key="any"):
         annList = self.get_annotation(ann_key)
         annAreas = {}
-        for ann in annList:
-            annAreas[int(ann["id"])] = ann['area']
+        for ann in annList: # normalize area
+            annAreas[int(ann["id"])] = ann['area'] / (self.data['dims'][0] *  self.data['dims'][1])
         annAreas = sort_dict(annAreas)
         return annAreas
+
+    def closest_ann_area(self, area, ann_key="any"):
+        areas = self.sort_area(ann_key)
+        id, ann_area = min(areas.items(), key=lambda x: abs(area - x[1]))
+        return self.annotation_by_id(id), ann_area
 
     def annotation_by_id(self, id):
         annList = self.get_annotation("any")
@@ -47,13 +54,17 @@ class COCO_Example():
         else:
             return self.data[key]
 
+    def get_random_annotation(self, key="any"):
+        return random.choice(self.get_annotation())
+
+    # remove any annotations containing a supercategory
+    # def remove_annotations(self, keys):
+    #     for ann in self.get_annotation():
+    #         categ = get_annotation_supercategory(ann)
+
+
     def get_caption(self):
         return self.data["caption"]
 
-    def get_annotation_center(self, ann):
-        box = ann["bbox"]
-        l_top_x = box[0]
-        l_top_y = box[1]
-        width = box[2]
-        height = box[3]
-        return [l_top_x + (width/2), l_top_y - (height/2)]
+    def get_num_annotations(self):
+        return len(self.areas_all)

@@ -1,53 +1,71 @@
 
-from matplotlib.pyplot import hist
-from dataset import create_attribute_dict, get_annotation_supercategory
+from copy import copy
+from re import S
+
+import plotly.graph_objects as go
+import random
+from skimage.exposure import histogram
+
+from dataset import composition_attributes, get_annotation_supercategory
 import numpy as np
-from skimage.exposure import match_histograms, histogram, cumulative_distribution, equalize_adapthist
+from skimage.exposure import match_histograms, cumulative_distribution, equalize_adapthist
 from skimage import img_as_float
+from metaplex import generate_metadata
 from pyramids import blend_masked_rgb
 from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent, add_images, mask_image
-from utils import print_pretty, save_object, save_asset_metadata_pair, find_nearest, sort_dict, imshow, load_json, load_object
-from coco_utils import model_path
+from utils import print_pretty, remove_file, save_object, save_asset_metadata_pair, find_nearest, sort_dict, imshow, load_json, load_object
+from coco_utils import model_path, get_annotation_center
 from language_model import LSTMTagger, generate_description_lstm
 from language_processing import generate_name, tokenize_sentence
 from markov_language import Markov
-from postprocessing import sharpen_image, jpeg_decimation, adaptive_hist
+from postprocessing import sharpen_image, jpeg_decimation, adaptive_hist, image_histogram
 from PIL import Image
 from tqdm import tqdm
 from config import LSTM_CONFIG
 
 VOCAB_INFO = load_object(model_path("vocab_info"))
 class BOTR_Layer():
-
-    def __init__(
-        self, BOTR, coco_example, annotation):
-        # self.Dataset = dataset
+    # add ability to move image components around
+    # add ability to have this object determine which layers
+    # get objects by area and relocate them
+    def __init__(self, BOTR, coco_example, annotation=None):
         self.BOTR = BOTR
         self.coco_example = coco_example
+        if annotation is None:
+            annotation = coco_example.get_random_annotation(key=BOTR.config['ann_key'])
         self.annotation = annotation
-        self.center = coco_example.get_annotation_center(annotation)
-        # self.maskedImage = mask_image(image, exclusionMask)
-        self.px_filled = np.count_nonzero(exclusionMask)
+        self.center = get_annotation_center(annotation)
+        self.px_filled = 0
 
+    # def recenter_annotation(self, center):
+    #     current_ctr = get_annotation_center(self.annotation)
+
+    def change_example(self, coco_example):
+        # search the space for a certain kind of example
+        # self.coco_example = BOTR.
+        self.coco_example = coco_example
+
+    def shuffle_ann(self):
+        self.annotation = self.coco_example.get_random_annotation()
 
     def update_mask(self, compositeMask=None):
         if compositeMask is not None:
-            mask = resize_fit(self.BOTR.get_mask(self.annotation),
-             [compositeMask.shape[0], compositeMask.shape[1]])
+            mask = self.get_mask(compositeMask.shape)
             exclusionMask = create_exclusion_mask(mask, compositeMask)
             self.px_filled = np.count_nonzero(exclusionMask)
             return exclusionMask
         else:
             return self.BOTR.get_mask(self.annotation)
 
-    def get_image(self, fit=None):
-        return self.coco_example.load_image(fit)
-
-    def dominant_color(self):
-        hist = histogram(self.mask_image())[0]
+    def dominant_color(self, fit=[256,256]):
+        img = self.mask_image(fit)
+        hist = histogram(img, channel_axis=-1, normalize=True)[0]
         avg = np.mean(hist, axis=0)
         print(np.argmax(avg))
 
+        return hist, img
+
+    # ======== masking =================================
 
     # mask image without exclusion mask
     def mask_image(self, fit=None):
@@ -60,195 +78,216 @@ class BOTR_Layer():
             mask = resize_fit(mask, [fit[0], fit[1]])
         return mask
 
-    def render(self, compositeMask, config):
-        # # we don't need to remask
-        # if compositeMask == self.compositeMask:
-        #     return self.maskedImage
-        # resize mask to fit
-        # mask = resize_fit(
-        #     self.BOTR.get_mask(self.annotation), 
-        #     [compositeMask.shape[0], compositeMask.shape[1]])
+    def render_exclusion_mask(self, compositeMask, config):
         mask = self.get_mask(compositeMask.shape)
-        # generate new exclusion mask
         exclusionMask = create_exclusion_mask(mask, compositeMask)
         image = self.coco_example.load_image(fit=config['outputSize'])
-        return mask_image(image, exclusionMask)
+        masked = image * exclusionMask
+        self.px_filled = np.count_nonzero(masked)
+        return masked, exclusionMask
 
-# an object that contains a generated botr
+    # ======== helpers =================================
+
+    def get_image(self, fit=None):
+        return self.coco_example.load_image(fit)
+
+    def percentage_fill(self, imageSize):
+        return self.px_filled/(imageSize[0]*imageSize[1])
+
+# ************************************************************
+# Class containing a list of botr layers, extending
+# functionality of list
+# ************************************************************
+class Layers():
+
+    def __init__(self):
+        self.layers = []
+
+    def __getitem__(self, idx):
+        return self.layers[idx]
+        
+    def __len__(self):
+        return len(self.layers)
+
+    def append(self, layer: BOTR_Layer):
+        self.layers.append(layer)
+
+    def shuffle_order(self):
+        random.shuffle(self.layers)
+
+    # remove n smallest images from canvas
+    def remove_smallest_n(self, n: int=1):
+        sizes = [l.px_filled for l in self.layers]
+        remove_idx = np.argsort(sizes)[:n]
+        for idx in remove_idx:
+            self.layers.pop(idx)        
+
+    # remove images from canvas under pixel threshold
+    def clean_invisible(self, thresh: int=1):
+        remove = [l for l in self.layers if l.px_filled < thresh]
+        for layer in remove:
+            self.layers.remove(layer)
+        print(f'removed {len(remove)} layers from canvas')
+
+# ************************************************************
+# An object that contains rasterized generated assets created
+# by a BOTR - works as a read-only state
+# ************************************************************
+class GeneratedItem():
+    def __init__(self, image, config, metadata):
+        self.image = image
+        self.config = config
+        self.metadata = metadata
+    
+    def display(self):
+        imshow(self.image, self.metadata['text']['name'])
+        print(f'Description: {self.metadata["text"]["description"]}')
+
+    def save(self, outpath):
+        save_asset_metadata_pair(
+            outpath,
+            self.image,
+            self.metadata)
+
+    def set_name(self, name: str) -> None:
+        self.metadata['text']["name"] = name
+
+    def set_description(self, description: str) -> None:
+        self.metadata['text']["description"] = description
+
+    def display_categories(self):
+        display_items = [i for i in self.metadata["composition"].items() if i[1] > 0]
+        labels = [i[0] for i in display_items]
+        values = [i[1] for i in display_items]
+        fig = go.Figure(
+            data=[go.Pie(labels=labels, values=values, hole=.3)])
+        fig.update_layout(title = self.metadata['text']['name'])
+        fig.show()
+
+# ************************************************************
+# An object that contains parameters and layers for
+# generating a collage image
+# ************************************************************
 class BOTR():
   
     def __init__(self, config, dataset):
-        self.layers = []
+        # self.layers = []
+        self.layers: Layers = Layers()
         self.config = config
         self.Dataset = dataset
-        self.metadata = None
-        # create_attribute_dict()
-        self.image = None
-        self.composites = []
-        self.set_description_model(config)
+        self.textMetadata = { "name" : "", "description" : "" }
+        self.metadata = self.generate_metadata(config)
+        # self.image = None
+        self.history: GeneratedItem = [] # contains a generated botr and description
+        self.generatedItem: GeneratedItem = None
+        self.set_description_model(config['descriptionModel'])
 
-    def append_layer(self, layer : BOTR_Layer):
-        self.layers.append( layer )
-        # self.layers.append(layer)
+    def display(self):
+        self.generatedItem.display()
 
-    def update_metadata(self, config):
-        if self.metadata is None:
-            self.metadata = self.generate_metadata(config)
-            return
-        for category in list(self.metadata['category_percentage'].keys()):
-            self.metadata['category_percentage'][category] = 0
-        for layer in self.layers:
-            category = get_annotation_supercategory(layer.annotation)
-            self.metadata['category_percentage'][category] += layer.px_filled / (config["outputSize"][0]*config["outputSize"][1])
-
-    def generate_metadata(self, config):
+    def generate_metadata(self, config=None) -> dict:
         if config is None:
             config = self.config
-        metadata = create_attribute_dict()
-
-        for layer in self.layers:
-            category = get_annotation_supercategory(layer.annotation)
-            metadata['category_percentage'][category] += layer.px_filled / (config["outputSize"][0]*config["outputSize"][1])
-            metadata['text_metadata']['objects'].append(category)
-            metadata['text_metadata']['descriptions'].append(layer.coco_example.get_caption())
+        metadata = {
+            # nesting to preserve generated text upon new generations
+            "text" : self.textMetadata,
+            "composition" : self.get_composition_attributes(config) }
         return metadata
 
-    # this is fucking trash because it took hours to try to figure out
-    # why histogram doesn't consistenly produce arrays of the same shape
-    # hist size exists to load the image as a lightweight small version
-    # for comparing histograms, and is not used during image compilation
-    def average_layer_histogram(self, config, histSize=(256,256)):
-        images = [l.get_image(histSize) for l in self.layers]
-        histograms = {}
-        for i, img in enumerate(images):
-            try:
-                hist = histogram(img, 
-                        normalize=config['normalizeHistogram'],
-                        channel_axis=config['histogramChannelAxis'])[0]
-                if hist.shape[-1] == histSize[0]:
-                    histograms[i] = hist
-            except Exception as e:
-                print(e)
-        if len(list(histograms.items())) == 0: # literally just give up theres no easy way
-            return images[0]
-        mean = np.median(list(histograms.values()))
-        # diffs = [np.sum(np.abs(h - mean)) for h in histograms.values()]
+    # get metadata of the current composition
+    def get_composition_attributes(self, config) -> dict:
+        attributes = composition_attributes()
+        for layer in self.layers:
+            categ = get_annotation_supercategory(layer.annotation)
+            attributes[categ] += layer.percentage_fill(config['outputSize'])
+        return attributes
+    
+    # saves the image and metadata assets
+    def save_assets(
+           self, base_path: str, 
+           genItem: GeneratedItem = None):
 
-        for k, h in histograms.items():
-            histograms[k] = np.sum(np.abs(h - mean))
+        self.save_state(genItem)
+        if genItem:
+            genItem.save(base_path)
+        else:
+            self.generatedItem(base_path)
 
-        sorted_h = sort_dict(histograms, reverse=False)
-        # print(list(sorted_h.keys()))
-        return images[list(sorted_h.keys())[0]]
-
-        # print(f'SORTED H {sorted_h}')
-        # idx_min = np.argmin(diffs)
-        # return images[idx_min] #FIX EVENTUALLY
-
+    def set_description_model(self, model: str):
+        if model == 'markov':
+                self.descriptionModel = Markov()
+        if model == 'lstm':
+            self.descriptionModel = LSTMTagger(LSTM_CONFIG, 
+                len(VOCAB_INFO['vocabulary']), len(VOCAB_INFO['all_tags']))
 
     def corpus(self):
         words = []
         for layer in self.layers:
-            words += tokenize_sentence(layer.coco_example.get_caption())
+            tokenized = tokenize_sentence(layer.coco_example.get_caption())
+            words += tokenized
         return words
 
-    def vocabulary(self):
-        return list(set(self.corpus()))
+    # ======== generating ================================
 
-    def get_mask(self, ann):
-        return self.Dataset.get_mask(ann)
+    def save_state(self, generatedItem: GeneratedItem = None):
+        if not generatedItem:
+            generatedItem = copy(self.generatedItem)
+        self.history.append(generatedItem)
 
-    def set_current_image(self, index : int):
-        self.image = self.composites[index]
+    def generate_description(
+            self, langParams: dict, 
+            modelType: str = None, 
+            genItem: GeneratedItem = None) -> str:
 
-    def get_current_image(self):
-        return self.image
-
-    def display_current_image(self):
-        imshow(self.image)
-
-    def sharpen(self, iterations : int):
-        self.image = sharpen_image(self.image, iterations)
-        self.composites.append(self.image)
-
-    def jpeg_decimate(self, quality : int):
-        self.image = jpeg_decimation(self.image, quality)
-        self.composites.append(self.image)
-
-    # saves the object for future use
-    def save_botr(self, path : str):
-        # del self.Dataset # this can be loaded in during runtime
-        del self.Dataset
-        save_object(self, f"{path}/{self.metadata['name']}")
-    
-    # saves the image and metadata assets
-    def save_assets(self, outpath : str, image_index : int = None):
-        if image_index is not None:
-            save_asset_metadata_pair(outpath, self.composites[image_index], self.metadata)
-        else:
-            save_asset_metadata_pair(outpath, self.image, self.metadata)
-
-    def set_name(self, name : str):
-        self.metadata["name"] = name
-
-    def set_description(self, description : str):
-        self.metadata["description"] = description
-
-    def set_description_model(self, config):
-        if config['restrictCorpus']:
-            config['corpus'] = self.corpus()
-            vocabSize = len(self.vocabulary())
-            tagsetSize = len(VOCAB_INFO['all_tags'])
-        else:
-            config['corpus'] = self.Dataset.text_corpus()
-            vocabSize = len(VOCAB_INFO['vocabulary'])
-            tagsetSize = len(VOCAB_INFO['all_tags'])
-
-        if config['descriptionModel'] == 'markov':
-                self.descriptionModel = Markov(config['corpus'])
-        if config['descriptionModel'] == 'lstm':
-            self.descriptionModel = LSTMTagger(LSTM_CONFIG, 
-                vocabSize, tagsetSize)
-        
-
-    def generate_description(self, config, modelType=None):
-        if modelType is not None:
+        # langParams={"seed" : "A", "iters" : 5, "length" : 10}
+        if not modelType:
             self.set_description_model(modelType)
-        # config={"seed" : "A", "iters" : 5, "corpus" : None}
-        self.metadata["description"] = self.descriptionModel.generate(config)
-        return self.metadata["description"]
+        if not genItem:
+            # save state of existing item, prepare new one
+            self.save_state(self.generatedItem)
+            genItem = self.generatedItem
 
-    def generate_name_description(self):
-        self.set_description(generate_description_lstm(self.metadata))
-        self.set_name(generate_name(self.metadata))
+        corpus = self.corpus() if self.config['restrictCorpus'] else VOCAB_INFO['vocabulary']
+        description = self.descriptionModel.generate(langParams, corpus)
+        genItem.set_description(description)
+        return description
 
-    def generator_ready(self):
-        if len(self.layers) > 0:
-            return True
-        print(f'No active layers, unable to generate image')
-        return False
+    def generate_name(self, 
+            genItem: GeneratedItem = None) -> str:
+        if not genItem: 
+            # save state of existing item, prepare new one
+            self.save_state(self.generatedItem)
+            genItem = self.generatedItem
+        name = generate_name(self.metadata['composition'])
+        genItem.set_name(name)
+        return name
 
-    def check_update_config(self, config):
-        if config is None:
-            return self.config
-        if config != self.config:
-            self.set_description_model(config)
-            self.config = config
-            return self.config
+    # get the layer with an average histogram
+    def average_layer_histogram(self, config, histSize=(256,256)) -> BOTR_Layer:
+        histograms = {l: image_histogram(l.get_image(histSize), config) for l in self.layers}
+        histograms = {k: v for k, v in histograms.items() if v is not None}
+        if len(histograms) == 0: # give up, because sometimes histogram is wacky
+            return self.layers[0].get_image()
+        mean = np.mean(list(histograms.values()))
+        histograms = {k: np.sum(np.abs(h-mean)) for k, h in histograms.items()}
+        min_layer, _ = min(histograms.items(), key=lambda x: abs(mean - x[1]))
+        return min_layer
 
-    def render(self, config=None):
-        composite = np.zeros((config["outputSize"][0], config["outputSize"][1],3), dtype=np.uint8)
+    def render(self, config) -> Image:
+        composite = np.zeros((config["outputSize"][0], config["outputSize"][1], 3), dtype=np.uint8)
         compositeMask = np.zeros((config["outputSize"][0], config["outputSize"][1], 1), dtype=np.float)
         # choose between automatic and manual color ref
+        # consider using a reference layer instead, where properties are matched to layer
         if config["refLayerHistogram"] is not None:
             referenceImg = self.layers[config["refLayerHistogram"]].get_image(config["outputSize"])
         else:
-            referenceImg = self.average_layer_histogram(config)
+            refLayer = self.average_layer_histogram(config)
+            referenceImg = refLayer.get_image(config["outputSize"])
          
         pbar = tqdm(total=len(self.layers))
 
         for layer in self.layers:
-            layer.update_mask(compositeMask)
+            # layer.update_mask(compositeMask)
             image = match_histograms(
                 layer.get_image(config["outputSize"]), 
                 referenceImg, 
@@ -259,51 +298,109 @@ class BOTR():
             if config["jpeg_quality"] != 100:
                 image = jpeg_decimation(image, config["jpeg_quality"], numpy=True)
            
-            if config['image_blending']['use_blending']:
-                composite = blend_masked_rgb(img_A=image,img_B=composite, 
-                mask_A=layer.exclusionMask, mask_B=compositeMask, blendConfig=config['image_blending'])
-            else:
-                composite = mask_add_composite(image, layer.exclusionMask, composite)
+            layerMasked, exclusionMask = layer.render_exclusion_mask(compositeMask, config)
 
-            compositeMask = np.logical_or(
-                layer.exclusionMask, compositeMask).astype(np.uint8)
+            if config['image_blending']['use_blending']:
+                composite = blend_masked_rgb(img_A=image, img_B=composite, 
+                mask_A=exclusionMask, mask_B=compositeMask, blendConfig=config['image_blending'])
+            else:
+                # composite = np.clip(composite + layerMasked, 0, 255)
+                # layer.render(compositeMask, config)
+                composite = mask_add_composite(image, exclusionMask, composite)
+
+            compositeMask = np.logical_or(exclusionMask, compositeMask).astype(np.uint8)
             pbar.update(1)
+
         composite = Image.fromarray(composite.astype(np.uint8))
-        self.composites.append(composite)
         return composite
 
-    def generate(self, config=None):
+    def generate(self, config: dict = None) -> GeneratedItem:
         if not self.generator_ready():
             return None, None
-        self.check_update_config(config)
-        self.image = self.render(config)
-        self.update_metadata(config)
-        if "name" not in self.metadata.keys() or "description" not in self.metadata.keys():
-            self.generate_name_description()
-        return self.image, self.metadata
+        if not config:
+            config = self.config
+        if self.generatedItem is not None:
+            self.save_state()
+        generatedItem = GeneratedItem(
+            self.render(config), config, self.generate_metadata(config))
 
+        langParams = {"seed" : "A", "iters" : 5, "length" : random.randint(3, 15)}
 
+        self.generate_description(
+            langParams = langParams, genItem = generatedItem)
+        self.generate_name(generatedItem)
+        self.generatedItem = generatedItem
 
-# def average_layer_histogram(self, config):
-#     images = [l.get_image(config["outputSize"]) for l in self.layers]
-#     histograms = {}
-#     for i, img in enumerate(images):
-#         try:
-#             hist = histogram(img, 
-#                     normalize=config['normalizeHistogram'],
-#                     channel_axis=config['histogramChannelAxis'])[0]
-#             if hist.shape[-1] == config["outputSize"][0]:
-#                 histograms[i] = hist
-#         except Exception as e:
-#             print(e)
-#     if len(list(histograms.items())) == 0: # literally just give up theres no easy way
-#         return images[0]
-#     mean = np.mean(list(histograms.values()))
-#     # diffs = [np.sum(np.abs(h - mean)) for h in histograms.values()]
+        return generatedItem
 
-#     for k, h in histograms.items():
-#         histograms[k] = np.sum(np.abs(h - mean))
+    # ======== imageops ================================
 
-#     sorted_h = sort_dict(histograms, reverse=False)
-#     print(list(sorted_h.keys()))
-#     return images[list(sorted_h.keys())[0]]
+    def sharpen(self, iterations: int, 
+            genItem: GeneratedItem = None):
+        if not genItem:
+            self.save_state(self.generatedItem)
+            genItem = self.generatedItem
+        genItem.image = sharpen_image(genItem.image, iterations)
+
+    def jpeg_decimate(self, quality: int, 
+            genItem: GeneratedItem = None):
+        if not genItem:
+            self.save_state(self.generatedItem)
+            genItem = self.generatedItem
+        genItem.image = jpeg_decimation(self.image, quality)
+
+    # ======== helpers =================================
+
+    def set_name(self, name: str):
+        self.generatedItem.textMetadata["name"] = name
+
+    def set_description(self, description: str):
+        self.generatedItem.textMetadata["description"] = description
+
+    def vocabulary(self):
+        return list(set(self.corpus()))
+
+    def generator_ready(self) -> bool:
+        if len(self.layers) > 0:
+            return True
+        print(f'No active layers, unable to generate image')
+        return False
+
+    def check_update_config(self, config: dict = None) -> dict:
+        if config is None:
+            return self.config
+        if config != self.config:
+            self.set_description_model(config["descriptionModel"])
+            self.config = config
+            return self.config
+
+    def get_mask(self, ann):
+        return self.Dataset.get_mask(ann)
+
+    def append_layer(self, layer : BOTR_Layer):
+        self.layers.append(layer)
+
+    # get the canvas fill in pixels or percent
+    # render mode is more accurate but more time consuming
+    def get_px_filled(self, percent: bool=True, render: bool=True) -> int:
+        if render:
+            comp = self.render(self.config).convert('L')
+            fill = np.count_nonzero(comp)
+        else:
+            fill = sum([l.px_filled for l in self.layers])
+        if percent:
+            fill /= (self.config["outputSize"][0] * self.config["outputSize"][1])
+        return fill
+        
+    # saves the object for future use
+    def save_botr(self, path : str):
+        del self.Dataset
+        save_object(self, f"{path}/{self.metadata['name']}")
+
+    def __getitem__(self, idx):
+        return self.history[idx]
+
+    def __len__(self):
+        return len(self.history)
+
+# instead of saving full descriptions to metadata, I should be saving coco links

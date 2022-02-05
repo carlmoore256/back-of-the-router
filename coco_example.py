@@ -32,7 +32,7 @@ class COCO_Example():
         annList = self.get_annotation(ann_key)
         annAreas = {}
         for ann in annList: # normalize area
-            annAreas[int(ann["id"])] = ann['area'] / (self.data['dims'][0] *  self.data['dims'][1])
+            annAreas[int(ann["id"])] = self.get_annotation_area(ann)
         annAreas = sort_dict(annAreas)
         return annAreas
 
@@ -56,6 +56,10 @@ class COCO_Example():
 
     def get_random_annotation(self, key="any"):
         return random.choice(self.get_annotation())
+    
+    # gets area relative to image size
+    def get_annotation_area(self, ann):
+        return ann['area'] / (self.data['dims'][0] *  self.data['dims'][1])
 
     # remove any annotations containing a supercategory
     # def remove_annotations(self, keys):

@@ -1,10 +1,12 @@
 
 from copy import copy
-from re import S
+import enum
 
 import plotly.graph_objects as go
 import random
+import cv2
 from skimage.exposure import histogram
+import math
 
 from dataset import composition_attributes, get_annotation_supercategory
 import numpy as np
@@ -23,6 +25,9 @@ from PIL import Image
 from tqdm import tqdm
 from config import LSTM_CONFIG
 
+from time import perf_counter
+
+
 VOCAB_INFO = load_object(model_path("vocab_info"))
 class BOTR_Layer():
     # add ability to move image components around
@@ -37,6 +42,8 @@ class BOTR_Layer():
         self.center = get_annotation_center(annotation)
         self.px_filled = 0
 
+        self.raster = None
+
     # def recenter_annotation(self, center):
     #     current_ctr = get_annotation_center(self.annotation)
 
@@ -44,9 +51,34 @@ class BOTR_Layer():
         # search the space for a certain kind of example
         # self.coco_example = BOTR.
         self.coco_example = coco_example
+        
+
+    # iterate through coco examples to find annotation with similar visual properties
+    def find_similar_annotation(self, area_tolerance=0.01, pos_tolerance=0.01) -> bool:
+        found_similar = False
+        for i, example in enumerate(self.BOTR.Dataset):
+            if example == self.coco_example or len(example.areas_all) == 0:
+                continue
+            current_area = self.coco_example.get_annotation_area(self.annotation)
+            new_ann, area = example.closest_ann_area(current_area)
+            areaDiff = abs(area - current_area)
+            if areaDiff < area_tolerance:
+                new_ctr = get_annotation_center(new_ann)
+                dist = math.dist(new_ctr, self.center)
+                if dist < pos_tolerance:
+                    self.coco_example = example
+                    self.annotation = new_ann
+                    self.center = new_ctr
+                    found_similar = True
+                    break
+        return found_similar
 
     def shuffle_ann(self):
         self.annotation = self.coco_example.get_random_annotation()
+
+    def update_raster(self, raster):
+        self.raster = raster
+        self.px_filled = np.count_nonzero(raster)
 
     def update_mask(self, compositeMask=None):
         if compositeMask is not None:
@@ -114,6 +146,18 @@ class Layers():
 
     def shuffle_order(self):
         random.shuffle(self.layers)
+
+    def find_new_items(self, area_tolerance=0.01, pos_tolerance=0.01):
+        print(f'=> finding similar annotations for {len(self.layers)} layers')
+        found = 0
+        for i, layer in enumerate(self.layers):
+            if i % 10 == 0:
+                print(f'finding new annotation for layer {i}/{len(self.layers)}')
+            success = layer.find_similar_annotation(area_tolerance, pos_tolerance)
+            if success:
+                found += 1
+        print(f'=> replaced {found} annotations')
+    
 
     # remove n smallest images from canvas
     def remove_smallest_n(self, n: int=1):
@@ -211,7 +255,7 @@ class BOTR():
         if genItem:
             genItem.save(base_path)
         else:
-            self.generatedItem(base_path)
+            self.generatedItem.save(base_path)
 
     def set_description_model(self, model: str):
         if model == 'markov':
@@ -274,6 +318,7 @@ class BOTR():
         return min_layer
 
     def render(self, config) -> Image:
+
         composite = np.zeros((config["outputSize"][0], config["outputSize"][1], 3), dtype=np.uint8)
         compositeMask = np.zeros((config["outputSize"][0], config["outputSize"][1], 1), dtype=np.float)
         # choose between automatic and manual color ref
@@ -283,11 +328,10 @@ class BOTR():
         else:
             refLayer = self.average_layer_histogram(config)
             referenceImg = refLayer.get_image(config["outputSize"])
-         
+
         pbar = tqdm(total=len(self.layers))
 
         for layer in self.layers:
-            # layer.update_mask(compositeMask)
             image = match_histograms(
                 layer.get_image(config["outputSize"]), 
                 referenceImg, 
@@ -297,17 +341,32 @@ class BOTR():
                 image = adaptive_hist(image, config['adaptiveHistKernel'], config['adaptiveHistClip'])
             if config["jpeg_quality"] != 100:
                 image = jpeg_decimation(image, config["jpeg_quality"], numpy=True)
-           
+
             layerMasked, exclusionMask = layer.render_exclusion_mask(compositeMask, config)
 
-            if config['image_blending']['use_blending']:
+            if config['compositeType'] == 'pyramid':
                 composite = blend_masked_rgb(img_A=image, img_B=composite, 
                 mask_A=exclusionMask, mask_B=compositeMask, blendConfig=config['image_blending'])
-            else:
-                # composite = np.clip(composite + layerMasked, 0, 255)
-                # layer.render(compositeMask, config)
+                # provide masked layer back to the layer
+                layer.update_raster(layerMasked) # this is incorrect here, change eventually
+            
+            if config['compositeType'] == 'binary':
                 composite = mask_add_composite(image, exclusionMask, composite)
+                layer.update_raster(layerMasked)
 
+            if config['compositeType'] == 'pro':
+                kernel = np.ones((
+                    config['proDilateKernel'],config['proDilateKernel']),np.uint8)
+                exclusionMask = cv2.dilate(
+                    exclusionMask.astype(np.float32), 
+                    kernel, iterations = config['proDilateIter'])
+                exclusionMask = cv2.GaussianBlur(
+                    exclusionMask/255, (config['proKernel'], config['proKernel']), 0)
+                exclusionMask = np.expand_dims(exclusionMask, -1)
+                excluded = np.clip(image * exclusionMask, 0, 255).astype(np.uint8)
+                composite = np.clip(composite + excluded, 0, 255)
+                layer.update_raster(excluded)
+            
             compositeMask = np.logical_or(exclusionMask, compositeMask).astype(np.uint8)
             pbar.update(1)
 
@@ -330,7 +389,6 @@ class BOTR():
             langParams = langParams, genItem = generatedItem)
         self.generate_name(generatedItem)
         self.generatedItem = generatedItem
-
         return generatedItem
 
     # ======== imageops ================================

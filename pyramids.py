@@ -128,6 +128,13 @@ def to_float_range(values):
 def blend_masked_rgb(img_A, img_B, 
   mask_A, mask_B, blendConfig, plotLevels=False):
 
+  if blendConfig['blurMaskPre']:
+    kernel = np.ones((9,9),np.uint8)
+    mask_A = cv2.dilate(mask_A.astype(np.float32), kernel, iterations = blendConfig["blurMaskPreIter"])
+    mask_A = cv2.GaussianBlur(mask_A/255, (blendConfig['blurMaskPreKernel'], blendConfig['blurMaskPreKernel']), 0)
+    mask_A = np.expand_dims(mask_A, -1)
+
+
   img_A = to_float_range(img_A)
   img_B = to_float_range(img_B)
   blended_rgb = []

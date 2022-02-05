@@ -154,3 +154,5 @@ language_model.ipynb
 saved_models/
 temp/
 wandb/
+
+ignore/

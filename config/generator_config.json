@@ -20,7 +20,7 @@
     "adaptiveHistClip" : 0.2,
     "descriptionModel" : "markov",
     "restrictCorpus" : true,
-    "titleModel" : "default",
+    "titleModel" : "markov",
     "image_blending" : {
         "use_blending" : false,
         "pyr_kernel_size" : 5,

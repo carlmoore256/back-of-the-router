@@ -8,6 +8,8 @@ import cv2
 from skimage.exposure import histogram
 import math
 
+from torch import normal
+
 from dataset import composition_attributes, get_annotation_supercategory
 import numpy as np
 from skimage.exposure import match_histograms, cumulative_distribution, equalize_adapthist
@@ -18,7 +20,7 @@ from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_
 from utils import print_pretty, remove_file, save_object, save_asset_metadata_pair, find_nearest, sort_dict, imshow, load_json, load_object
 from coco_utils import model_path, get_annotation_center
 from language_model import LSTMTagger, generate_description_lstm
-from language_processing import generate_name, tokenize_sentence
+from language_processing import tokenize_sentence
 from markov_language import Markov
 from postprocessing import sharpen_image, jpeg_decimation, adaptive_hist, image_histogram
 from PIL import Image, ImageOps
@@ -229,6 +231,7 @@ class BOTR():
         # self.image = None
         self.history: GeneratedItem = [] # contains a generated botr and description
         self.generatedItem: GeneratedItem = None
+        self.title_model = Markov()
         self.set_description_model(config['descriptionModel'])
 
     def display(self):
@@ -248,17 +251,21 @@ class BOTR():
         return metadata
 
     # get metadata of the current composition
-    def get_composition_attributes(self, config) -> dict:
+    def get_composition_attributes(self, 
+            config: dict, normalize: bool=True) -> dict:
         attributes = composition_attributes()
         for layer in self.layers:
             categ = get_annotation_supercategory(layer.annotation)
             attributes[categ] += layer.percentage_fill(config['outputSize'])
+        self.total_fill = sum(list(attributes.values()))
+        if normalize and self.total_fill > 0:
+            attributes = {k: v/self.total_fill for k, v in attributes.items()}
         return attributes
     
     # saves the image and metadata assets
     def save_assets(
            self, base_path: str, 
-           genItem: GeneratedItem = None):
+           genItem: GeneratedItem = None) -> None:
 
         self.save_state(genItem)
         if genItem:
@@ -266,14 +273,14 @@ class BOTR():
         else:
             self.generatedItem.save(base_path)
 
-    def set_description_model(self, model: str):
+    def set_description_model(self, model: str) -> None:
         if model == 'markov':
                 self.descriptionModel = Markov()
         if model == 'lstm':
             self.descriptionModel = LSTMTagger(LSTM_CONFIG, 
                 len(VOCAB_INFO['vocabulary']), len(VOCAB_INFO['all_tags']))
 
-    def corpus(self):
+    def corpus(self) -> list:
         words = []
         for layer in self.layers:
             tokenized = tokenize_sentence(layer.coco_example.get_caption())
@@ -282,7 +289,7 @@ class BOTR():
 
     # ======== generating ================================
 
-    def save_state(self, generatedItem: GeneratedItem = None):
+    def save_state(self, generatedItem: GeneratedItem = None) -> None:
         if not generatedItem:
             generatedItem = copy(self.generatedItem)
         self.history.append(generatedItem)
@@ -301,17 +308,19 @@ class BOTR():
             genItem = self.generatedItem
 
         corpus = self.corpus() if self.config['restrictCorpus'] else VOCAB_INFO['vocabulary']
-        description = self.descriptionModel.generate(langParams, corpus)
+        description = self.descriptionModel.generate_sentence(langParams, corpus)
         genItem.set_description(description)
         return description
 
-    def generate_name(self, 
-            genItem: GeneratedItem = None) -> str:
-        if not genItem: 
+    def generate_name(self, genItem: GeneratedItem = None, 
+                        length: int=3) -> str:
+        if not genItem:
             # save state of existing item, prepare new one
             self.save_state(self.generatedItem)
             genItem = self.generatedItem
-        name = generate_name(self.metadata['composition'])
+        name = self.title_model.generate_word(
+            {"length" : length},
+            self.metadata['composition'].keys())
         genItem.set_name(name)
         return name
 
@@ -396,21 +405,21 @@ class BOTR():
 
         self.generate_description(
             langParams = langParams, genItem = generatedItem)
-        self.generate_name(generatedItem)
+        self.generate_name(generatedItem, length=random.randint(2, 5))
         self.generatedItem = generatedItem
         return generatedItem
 
     # ======== imageops ================================
 
     def sharpen(self, iterations: int, 
-            genItem: GeneratedItem = None):
+            genItem: GeneratedItem = None) -> None:
         if not genItem:
             self.save_state(self.generatedItem)
             genItem = self.generatedItem
         genItem.image = sharpen_image(genItem.image, iterations)
 
     def jpeg_decimate(self, quality: int, 
-            genItem: GeneratedItem = None):
+            genItem: GeneratedItem = None) -> None:
         if not genItem:
             self.save_state(self.generatedItem)
             genItem = self.generatedItem
@@ -418,13 +427,13 @@ class BOTR():
 
     # ======== helpers =================================
 
-    def set_name(self, name: str):
+    def set_name(self, name: str) -> None:
         self.generatedItem.textMetadata["name"] = name
 
-    def set_description(self, description: str):
+    def set_description(self, description: str) -> None:
         self.generatedItem.textMetadata["description"] = description
 
-    def vocabulary(self):
+    def vocabulary(self) -> list:
         return list(set(self.corpus()))
 
     def generator_ready(self) -> bool:

@@ -24,26 +24,25 @@ def is_allowed_category(ann, exclusions):
     return True
 
 # fill with random sized patches
-# def fill_target_area(botrGen: BOTR, areaTarget: float=0.03, 
-#                         jitter: float=0.1, tolerance: float = 0.001,
-#                         layers: int=100, exclusions: str=[]):
+def fill_target_area_fast(botrGen: BOTR, searchOpts: dict,
+                        jitter: float=0.1, layers: int=50):
     
-#     while len(botrGen.layers) < layers:
-#         example, ann = botrGen.Dataset.example_target_area(
-#             botrGen.Dataset, 
-#             areaTarget * ((jitter * random.random()) + 1),
-#             tolerance)
-#         if is_allowed_category(ann, exclusions):
-#             botrGen.append_layer(BOTR_Layer(botrGen, example, ann))
+    while len(botrGen.layers) < layers:
+        example, ann = botrGen.Dataset.get_example_target_area(
+            area_target = searchOpts['areaTarget'] * ((jitter * random.random()) + 1),
+            area_tolerance = searchOpts['areaTolerance'],
+            ann_type = searchOpts['ann_type'])
+        if is_allowed_category(ann, searchOpts['exclusions']):
+            botrGen.append_layer(BOTR_Layer(botrGen, example, ann))
 
 # fill with random sized patches
 def fill_target_area(botrGen: BOTR, searchOpts: dict, 
-                        jitter: float=0.1, layers: int=100):
+                        jitter: float=0.1, layers: int=50):
 
     candidates = botrGen.Dataset.candidates_target_area(
-        areaTarget=searchOpts['areaTarget'] * ((jitter * random.random()) + 1),
-        areaTolerance=searchOpts['areaTolerance'],
-        ann_type=searchOpts['ann_type'])
+        area_target = searchOpts['areaTarget'] * ((jitter * random.random()) + 1),
+        area_tolerance = searchOpts['areaTolerance'],
+        ann_type = searchOpts['ann_type'])
     candidates = list(candidates.items())
     random.shuffle(candidates)
 
@@ -54,7 +53,7 @@ def fill_target_area(botrGen: BOTR, searchOpts: dict,
 
 
 def add_single_patch(botrGen: BOTR, searchOpts: dict, jitter: float=0.1):
-    example, ann = examples_search_opts(botrGen.Dataset, searchOpts)[0]
+    example, ann = random.choice(examples_search_opts(botrGen.Dataset, searchOpts))
     botrGen.append_layer(BOTR_Layer(botrGen, example, ann))
 
 def add_multi_patch(botrGen: BOTR, searchOpts: dict, numPatches: int=10):
@@ -76,13 +75,13 @@ def add_multi_patch(botrGen: BOTR, searchOpts: dict, numPatches: int=10):
 def examples_search_opts(dataset: Dataset, searchOpts: dict):
     
     areas = dataset.candidates_target_area(
-        areaTarget=searchOpts['areaTarget'],
-        areaTolerance=searchOpts['areaTolerance'],
+        area_target=searchOpts['areaTarget'],
+        area_tolerance=searchOpts['areaTolerance'],
         ann_type=searchOpts['ann_type'])
 
     positions = dataset.candidates_target_pos(
-        posTarget=searchOpts['posTarget'],
-        posTolerance=searchOpts['posTolerance'],
+        pos_target=searchOpts['posTarget'],
+        pos_tolerance=searchOpts['posTolerance'],
         ann_type=searchOpts['ann_type'])
 
     matches = list(areas.keys() & positions.keys())

@@ -34,7 +34,7 @@ class LSTMTagger(nn.Module):
         # The linear layer that maps from hidden state space to tag space
         self.hidden2tag = nn.Linear(config["hidden_dim"], tagset_size)
 
-    def generate(self, params, corpus):
+    def generate_sentence(self, params, corpus):
         return self.iterative_sentence(params['seed'], params['iters'], corpus)
 
     def iterative_sentence(self, seed : str, iters : int = 10, corpus = None):

@@ -11,6 +11,7 @@ import glob
 import requests
 from zipfile import ZipFile
 from tqdm import tqdm
+from PIL import Image
 from metaplex import format_file_list, generate_metadata, metaplex_attributes, format_file_list, METAPLEX_ATTRS
 
 def print_pretty(data):
@@ -34,6 +35,13 @@ def display_multiple_images(images=[], titles=[], size=(20,10)):
         plt.yticks([])
     plt.show()
     plt.close()
+
+def display_image_meta(image, metadata, size=(10,10)):
+    imshow(
+        image, 
+        f"{metadata['symbol']} : {metadata['name']}",
+        size)
+    print_pretty(metadata)
 
 def filter_list(inputList, key, allowedVals):
     filtered = [x[key] for x in inputList if x[key] in allowedVals]
@@ -143,6 +151,22 @@ def download_file(url, output_path):
             size = file.write(data)
             bar.update(size)
 
+
+# Download an image and save into temp dir
+def download_image(url, temp_dir="temp/"):
+    print(f'Downloading image from {url}')
+    name = 'download-temp.png'
+    # name = url.split('/')[-1]
+    check_make_dir(temp_dir)
+    img_path = os.path.join(temp_dir, name)
+    download_file(url, img_path)
+    return Image.open(img_path)
+
+# open an image either from web or local dir
+def open_image(uri):
+    if check_if_local(uri):
+        return Image.open(uri)
+    return download_image(uri)
     # urllib.urlretrieve(url, output_path)
 
 def unzip_file(file_path, output_path):
@@ -155,12 +179,15 @@ def remove_file(file_path):
     os.remove(file_path)
     print(f'Removed {file_path}')
 
-def check_make_path(path):
+def check_make_dir(path):
     if not os.path.exists(path):
         os.mkdir(path)
         print(f"made directory {path}")
-    
 
+def check_if_local(path):
+  if path.startswith("http"):
+    return False
+  return True
     # with zipfile.ZipFile(file_path, 'r') as zip_ref:
     #     zip_ref.extractall(output_path)
 

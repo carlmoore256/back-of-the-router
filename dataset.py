@@ -1,7 +1,7 @@
 # contains functions for downloading the coco dataset
 import math
 
-from utils import download_file, unzip_file, load_object, save_object, remove_file, check_make_path, print_pretty
+from utils import download_file, unzip_file, load_object, save_object, remove_file, check_make_dir, print_pretty
 from coco_utils import generate_assets, check_missing_assets, coco_value_distribution, load_asset, load_coco_obj, model_path, get_annotation_center
 from language_processing import tokenize_sentence, get_all_possible_tags
 from coco_example import COCO_Example
@@ -58,13 +58,12 @@ class Dataset():
         return None, None
 
     # get a list of coco annotations and matching examples within an area constriant
-    def candidates_target_area(self, example=None, areaTarget: float=0.05, 
-                                areaTolerance: float=0.01, ann_type="any"):
+    def candidates_target_area(self, example=None, area_target: float=0.05, 
+                                area_tolerance: float=0.01, ann_type="any"):
         candidates = {}
-        # candidates = []
         for _, [id, example] in enumerate(self.coco_examples.items()):
-            ann, area = example.closest_ann_area(areaTarget, ann_type)
-            if abs(area - areaTarget) < areaTolerance:
+            ann, area = example.closest_ann_area(area_target, ann_type)
+            if abs(area - area_target) < area_tolerance:
                 # candidates.append([example, ann])
                 candidates[example] = ann
         if len(candidates) > 0:
@@ -72,40 +71,23 @@ class Dataset():
         return None, None
 
     # get a list of coco annotations and matching examples within a position constraint
-    def candidates_target_pos(self, example=None, posTarget: float=[],
-                             posTolerance: float=0.1, ann_type: str="any"):
+    def candidates_target_pos(self, example=None, pos_target: float=[],
+                             pos_tolerance: float=0.1, ann_type: str="any"):
         candidates = {}
-        # candidates = []
         for _, [id, example] in enumerate(self.coco_examples.items()):
-            ann, dist = example.closest_ann_pos(posTarget, True, ann_type)
-            if dist < posTolerance:
+            ann, dist = example.closest_ann_pos(pos_target, True, ann_type)
+            if dist < pos_tolerance:
                 # candidates.append([example, ann])
                 candidates[example] = ann
         if len(candidates) > 0:
             return candidates
         return None, None
 
-    # gets an example with annotation using a dict of search options
-    def example_search_opts(self, searchOpts: dict):
+    def get_example_target_area(self, area_target, area_tolerance, ann_type):
         while True:
-            example = None
-            ann = None
-
-            example, ann_area = self.candidates_target_area(
-                areaTarget=searchOpts['areaTarget'],
-                areaTolerance=searchOpts['areaTolerance'],
-                ann_type=searchOpts['ann_type'])
-            
-            if ann_area is None:
-                continue
-
-            example, ann_pos = self.candidates_target_pos(
-                example=example,
-                posTarget=searchOpts['posTarget'],
-                posTolerance=searchOpts['posTolerance'],
-                ann_type=searchOpts['ann_type'])
-
-            if ann_area == ann_pos:
+            example = self.get_coco_example()
+            ann, area = example.closest_ann_area(area_target, ann_type)
+            if abs(area - area_target) < area_tolerance:
                 return example, ann
 
     # use the coco object to extract a binary mask
@@ -203,7 +185,7 @@ if __name__ == "__main__":
     # parser.add_argument('--config', type=str, required=False, default="config/dataset_config.json", 
     #                     help='path to the dataset config json')
     # args = parser.parse_args()
-    check_make_path(DATASET_CONFIG["base_path"])
-    check_make_path(DATASET_CONFIG["temp_path"])
+    check_make_dir(DATASET_CONFIG["base_path"])
+    check_make_dir(DATASET_CONFIG["temp_path"])
     download_dataset_archives(DATASET_CONFIG)
     generate_assets()

@@ -5,6 +5,7 @@ from coco_utils import model_path
 from nltk.tokenize import sent_tokenize, word_tokenize, sonority_sequencing
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
+from nltk.tokenize.sonority_sequencing import SyllableTokenizer
 from nltk import pos_tag
 from config import DATASET_CONFIG
 import random
@@ -102,6 +103,19 @@ def get_vocabulary(words):
 def get_corpus(descriptions):
   words = tokenize_descriptions(descriptions)
   return get_vocabulary(words)
+
+def end_sentence(tokenized: list) -> str:
+  stop_words = set(stopwords.words("english"))
+  last_word = tokenized[-1]
+
+  while last_word in stop_words:
+    last_word = tokenized.pop(-1)
+    if len(tokenized) < 1:
+      return ""
+
+  sentence_end = tokenized.pop(-1) + "."
+  tokenized.append(sentence_end)
+  return " ".join(tokenized)
 
 def filter_stopwords(words):
   stop_words = set(stopwords.words("english"))

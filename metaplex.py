@@ -4,8 +4,9 @@ import json
 # [ {"trait_type" : "value"} , {}, ... ]
 def metaplex_attributes(data):
     attributes = []
-    for k, v in data:
+    for k, v in data.items():
         attributes.append({"trait_type" : k, "value" : v})
+    return attributes
 
 def format_file_list(files):
     f_list = []
@@ -31,9 +32,7 @@ def format_botr_metaplex(botr_data, image_uri, animation_url, website_url="homun
     formatted = {}
     attributes = metaplex_attributes(botr_data['composition'])
 
-    
-
-    return formatted
+    return attributes
 
 
 def generate_metadata(
@@ -74,6 +73,17 @@ def generate_metadata(
         }
     }
     return metadata
+
+METAPLEX_ATTRS = {
+    'symbol' : 'BOTR',
+    'description' : 'Confusing images',
+    'seller_fee_basis_points' : 0,
+    'external_url' : 'homunculi.org/art',
+    'collection_name' : 'Back-of-the-Router',
+    'collection_family' : 'Homunculi',
+    'category' : 'image',
+    'royalties' : format_royalties(["6TNtaPn8MEaBvekb7PzFnPTm6aTHdvFmSBoRznjETjXK"],[100]) 
+}
 
 if __name__ == "__main__":
     royalties = format_royalties(

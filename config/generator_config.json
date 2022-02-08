@@ -1,4 +1,8 @@
 {
+    "compositeType" : "pro",
+    "proDilateKernel" : 3,
+    "proDilateIter" : 2,
+    "proKernel" : 5,
     "avgPatchSize" : 0.1,
     "avgPatchVariance" : 0.1,
     "minPatchArea" : 0.001, 

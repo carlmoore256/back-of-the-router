@@ -156,3 +156,5 @@ temp/
 wandb/
 
 ignore/
+config/assets/
+rendering.ipynb

@@ -1,7 +1,7 @@
 from utils import display_multiple_images, save_asset_metadata_pair
 from coco_utils import load_coco_image, closest_sized_annotation
 from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent, add_images, mask_image
-from dataset import Dataset, filter_annotation_categories, get_annotation_supercategory, create_attribute_dict
+from dataset import Dataset, filter_annotation_categories, get_annotation_supercategory, composition_attributes
 from language_processing import generate_name, zipf_description
 from language_model import generate_description_lstm
 from postprocessing import sharpen_image, jpeg_decimation
@@ -58,7 +58,7 @@ class BOTR_Generator():
     composite = np.zeros((config["outputSize"][0], config["outputSize"][1],3), dtype=np.uint8)
     compositeMask = np.zeros((config["outputSize"][0], config["outputSize"][1], 1), dtype=np.float)
 
-    attributes = create_attribute_dict()
+    attributes = composition_attributes()
     totalArea = config['outputSize'][0]*config['outputSize'][1]
 
     px_filled = 0
@@ -72,7 +72,7 @@ class BOTR_Generator():
     pbar = tqdm(total=config['targetFill'])
     while px_filled < config['targetFill']:
       cocoExample = self.Dataset.get_coco_example()
-      annList = cocoExample.get_annotation(config['ann_key'])
+      annList = cocoExample.get_annotations(config['ann_key'])
 
       # annList = self.get_random_ann_list(config['ann_key'])
       annList = filter_annotation_categories(annList, config["allowedCategories"])

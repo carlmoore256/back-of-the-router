@@ -11,6 +11,7 @@ import glob
 import requests
 from zipfile import ZipFile
 from tqdm import tqdm
+from metaplex import format_file_list, generate_metadata, metaplex_attributes, format_file_list, METAPLEX_ATTRS
 
 def print_pretty(data):
     print(json.dumps(data, indent=2))
@@ -86,12 +87,29 @@ def load_image_cv2(path):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
     return img
 
-def save_asset_metadata_pair(path, image, metadata):
+def save_asset_metadata_pair(path, image, metadata, metaplex=True):
+
+
     index = 0
     while True:
         png_path = os.path.join(path, f"{str(index)}.png")
         json_path = os.path.join(path, f"{str(index)}.json")
         if not os.path.isfile(png_path) and not os.path.isfile(json_path):
+            if metaplex:
+                metadata = generate_metadata(
+                    name = metadata['text']['name'],
+                    symbol = METAPLEX_ATTRS['symbol'],
+                    description = METAPLEX_ATTRS['description'],
+                    seller_fee_basis_points = METAPLEX_ATTRS['seller_fee_basis_points'],
+                    image_file = png_path,
+                    animation_path = '',
+                    external_url = METAPLEX_ATTRS['external_url'],
+                    attributes = metaplex_attributes(metadata['composition']),
+                    collection_name = METAPLEX_ATTRS['collection_name'],
+                    collection_family = METAPLEX_ATTRS['collection_family'],
+                    files = [png_path],
+                    category = METAPLEX_ATTRS['category'],
+                    royalties = METAPLEX_ATTRS['royalties'])
             image.save(png_path)
             save_json(json_path, metadata)
             print(f"saved image and metadata pair: {png_path} {json_path}")

@@ -21,7 +21,7 @@ from language_model import LSTMTagger, generate_description_lstm
 from language_processing import generate_name, tokenize_sentence
 from markov_language import Markov
 from postprocessing import sharpen_image, jpeg_decimation, adaptive_hist, image_histogram
-from PIL import Image
+from PIL import Image, ImageOps
 from tqdm import tqdm
 from config import LSTM_CONFIG
 
@@ -78,7 +78,12 @@ class BOTR_Layer():
 
     def update_raster(self, raster):
         self.raster = raster
-        self.px_filled = np.count_nonzero(raster)
+
+        raster *= 255
+        raster = np.clip(raster, 0, 255).astype(np.uint8)
+        bw = np.asarray(ImageOps.grayscale(Image.fromarray(raster)))
+        # print(f'BW {bw.dtype} {bw}')
+        self.px_filled = np.count_nonzero(bw)
 
     def update_mask(self, compositeMask=None):
         if compositeMask is not None:
@@ -229,6 +234,10 @@ class BOTR():
     def display(self):
         self.generatedItem.display()
 
+    def clear_layers(self):
+        del self.layers
+        self.layers = Layers()
+
     def generate_metadata(self, config=None) -> dict:
         if config is None:
             config = self.config
@@ -361,10 +370,10 @@ class BOTR():
                     exclusionMask.astype(np.float32), 
                     kernel, iterations = config['proDilateIter'])
                 exclusionMask = cv2.GaussianBlur(
-                    exclusionMask/255, (config['proKernel'], config['proKernel']), 0)
+                    exclusionMask/256, (config['proKernel'], config['proKernel']), 0)
                 exclusionMask = np.expand_dims(exclusionMask, -1)
-                excluded = np.clip(image * exclusionMask, 0, 255).astype(np.uint8)
-                composite = np.clip(composite + excluded, 0, 255)
+                excluded = np.clip(image * exclusionMask, 0, 255)
+                composite = np.clip(composite + excluded, 0, 255).astype(np.uint8)
                 layer.update_raster(excluded)
             
             compositeMask = np.logical_or(exclusionMask, compositeMask).astype(np.uint8)

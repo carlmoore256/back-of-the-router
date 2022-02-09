@@ -1,5 +1,10 @@
 {
     "inheritence_fill" : 0.75,
     "target_fill" : 0.95,
-    "overstep_lim" : 1.25
+    "overstep_lim" : 1.25,
+    "nft_creators" : 
+    [
+        {"address" : "6TNtaPn8MEaBvekb7PzFnPTm6aTHdvFmSBoRznjETjXK", "share" : 50},
+        {"address" : "CAR71eJdkS31QTRBauqmYe5ERScodoZLJ6DiauBhuRZx", "share" : 30}
+    ]
 }

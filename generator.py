@@ -1,4 +1,5 @@
-from utils import display_multiple_images, save_asset_metadata_pair
+from utils import display_multiple_images
+from metaplex import save_asset_metadata_pair
 from coco_utils import load_coco_image, closest_sized_annotation
 from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent, add_images, mask_image
 from dataset import Dataset, filter_annotation_categories, get_annotation_supercategory, composition_attributes

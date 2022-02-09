@@ -15,16 +15,17 @@ from dataset import composition_attributes, get_annotation_supercategory
 import numpy as np
 from skimage.exposure import match_histograms, cumulative_distribution, equalize_adapthist
 from skimage import img_as_float
-from metaplex import generate_metadata
+from metaplex import generate_metadata, save_asset_metadata_pair
 from pyramids import blend_masked_rgb
 from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent, add_images, mask_image
-from utils import print_pretty, remove_file, save_object, save_asset_metadata_pair, find_nearest, sort_dict 
+from utils import print_pretty, remove_file, save_object, find_nearest, sort_dict 
 from utils import imshow, load_json, load_object, get_obj_size, image_nonzero_px, arr2d_to_img
 from coco_utils import model_path, get_annotation_center
 from language_model import LSTMTagger, generate_description_lstm
 from language_processing import tokenize_sentence
 from markov_language import Markov
 from postprocessing import sharpen_image, jpeg_decimation, adaptive_hist, image_histogram
+from visualization import attribute_breakdown
 from PIL import Image, ImageOps
 from tqdm import tqdm
 from config import LSTM_CONFIG
@@ -215,13 +216,8 @@ class GeneratedItem():
         self.metadata['text']["description"] = description
 
     def display_categories(self):
-        display_items = [i for i in self.metadata["composition"].items() if i[1] > 0]
-        labels = [i[0] for i in display_items]
-        values = [i[1] for i in display_items]
-        fig = go.Figure(
-            data=[go.Pie(labels=labels, values=values, hole=.3)])
-        fig.update_layout(title = self.metadata['text']['name'])
-        fig.show()
+        attribute_breakdown(self.metadata["composition"],
+                    title=self.metadata['name'], metaplex=False)
 
 # ************************************************************
 # An object that contains parameters and layers for

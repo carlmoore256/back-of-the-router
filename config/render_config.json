@@ -8,7 +8,7 @@
     "minPatchArea" : 0.001, 
     "maxPatchArea" : 0.4, 
     "targetFill" : 0.99,
-    "outputSize" : [1024, 1024],
+    "outputSize" : [256, 256],
     "ann_key" : "any",
     "multichannelColorMatching" : true,
     "jpeg_quality" : 100,

@@ -11,7 +11,7 @@ import glob
 import requests
 from zipfile import ZipFile
 from tqdm import tqdm
-from PIL import Image
+from PIL import Image, ImageOps
 from metaplex import format_file_list, generate_metadata, metaplex_attributes, format_file_list, METAPLEX_ATTRS
 
 def print_pretty(data):
@@ -89,6 +89,15 @@ def arr2d_to_3d(arr):
     arr = np.expand_dims(np.asarray(arr), -1)
     arr = np.repeat(arr, 3, axis=-1)
     arr = np.repeat(arr, 3, axis=-1)
+
+def arr2d_to_img(arr) -> Image:
+    # if arr.dtype == np.float:
+    arr = np.clip(arr * 255, 0, 255).astype(np.uint8)
+    return Image.fromarray(arr)
+
+def image_nonzero_px(image: Image) -> int:
+    img_arr = np.asarray(ImageOps.grayscale(image))
+    return np.count_nonzero(img_arr)
 
 def load_image_cv2(path):
     img = cv2.imread(path)
@@ -191,3 +200,30 @@ def check_if_local(path):
     # with zipfile.ZipFile(file_path, 'r') as zip_ref:
     #     zip_ref.extractall(output_path)
 
+# https://stackoverflow.com/questions/13530762/how-to-know-bytes-size-of-python-object-like-arrays-and-dictionaries-the-simp
+def get_obj_size(obj):
+    import gc
+    import sys
+
+    marked = {id(obj)}
+    obj_q = [obj]
+    sz = 0
+
+    while obj_q:
+        sz += sum(map(sys.getsizeof, obj_q))
+
+        # Lookup all the object referred to by the object in obj_q.
+        # See: https://docs.python.org/3.7/library/gc.html#gc.get_referents
+        all_refr = ((id(o), o) for o in gc.get_referents(*obj_q))
+
+        # Filter object that are already marked.
+        # Using dict notation will prevent repeated objects.
+        new_refr = {o_id: o for o_id, o in all_refr if o_id not in marked and not isinstance(o, type)}
+
+        # The new obj_q will be the ones that were not marked,
+        # and we will update marked with their ids so we will
+        # not traverse them again.
+        obj_q = new_refr.values()
+        marked.update(new_refr.keys())
+
+    return sz

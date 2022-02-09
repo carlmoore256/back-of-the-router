@@ -59,7 +59,7 @@ class Dataset():
 
     # get a list of coco annotations and matching examples within an area constriant
     def candidates_target_area(self, example=None, area_target: float=0.05, 
-                                area_tolerance: float=0.01, ann_type="any"):
+                                area_tolerance: float=0.01, ann_type="any", sort=True):
         candidates = {}
         for _, [id, example] in enumerate(self.coco_examples.items()):
             ann, area = example.closest_ann_area(area_target, ann_type)
@@ -67,6 +67,11 @@ class Dataset():
                 # candidates.append([example, ann])
                 candidates[example] = ann
         if len(candidates) > 0:
+            if sort:
+                candidates = {
+                    k: v for k, v in 
+                    sorted(candidates.items(), key=lambda item: item[0].get_annotation_area(item[1]))
+                    }
             return candidates
         return None, None
 

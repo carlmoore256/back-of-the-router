@@ -6,8 +6,8 @@ import solana
 # get_mint_info/
 
 IMG_META_URI = {
-    "image" : "out/28.png",
-    "metadata" : "out/28.json"
+    "image" : "out/0.png",
+    "metadata" : "out/0.json"
 }
 
 class BOTR_NFT():

@@ -1,11 +1,19 @@
 import json
 
 # changes a dictionary with values into the metaplex format:
-# [ {"trait_type" : "value"} , {}, ... ]
+# [ {"trait_type" : v, "value" : v} , {}, ... ]
 def metaplex_attributes(data):
     attributes = []
     for k, v in data.items():
         attributes.append({"trait_type" : k, "value" : v})
+    return attributes
+
+# changes dict of type [ {"trait_type" : v, "value" : v} , {}, ... ]
+# back into {attribute: value}
+def reverse_metaplex_attributes(data):
+    attributes = {}
+    for attr in data:
+        attributes[attr['trait_type']] = attr['value']
     return attributes
 
 def format_file_list(files):

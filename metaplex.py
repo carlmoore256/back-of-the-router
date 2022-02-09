@@ -47,7 +47,7 @@ def generate_metadata(
     name = '',
     symbol = '',
     description = '',
-    seller_fee_basis_points = 0,
+    seller_fee_basis_points = 7,
     image_file = '',
     animation_path = '',
     external_url = 'homunculi.org/art',

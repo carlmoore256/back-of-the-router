@@ -182,7 +182,7 @@ class Layers():
             self.layers.pop(idx)        
 
     # remove images from canvas under pixel threshold
-    def clean_invisible(self, thresh: int=1):
+    def clean_invisible(self, thresh: int=0.001):
         remove = [l for l in self.layers if l.px_filled < thresh]
         for layer in remove:
             self.layers.remove(layer)
@@ -203,7 +203,7 @@ class GeneratedItem():
         print(f'Description: {self.metadata["text"]["description"]}')
 
     def save(self, outpath):
-        save_asset_metadata_pair(
+        return save_asset_metadata_pair(
             outpath,
             self.image,
             self.metadata)
@@ -274,12 +274,11 @@ class BOTR():
     def save_assets(
            self, base_path: str, 
            genItem: GeneratedItem = None) -> None:
-
+        if genItem is None:
+            genItem = self.generatedItem
         self.save_state(genItem)
-        if genItem:
-            genItem.save(base_path)
-        else:
-            self.generatedItem.save(base_path)
+        png_path, json_path = genItem.save(base_path)
+        return png_path, json_path
 
     def set_description_model(self, model: str) -> None:
         if model == 'markov':
@@ -419,7 +418,7 @@ class BOTR():
         
         if self.generatedItem is not None:
             self.save_state()
-            
+
         generatedItem = GeneratedItem(
             self.render(config), config, self.generate_metadata(config))
 
@@ -435,6 +434,7 @@ class BOTR():
             self.generate_description(langParams=langParams, genItem=generatedItem)
 
         self.generatedItem = generatedItem
+        # self.save_state()
         return generatedItem
 
     # ======== imageops ================================
@@ -487,14 +487,12 @@ class BOTR():
 
     # get the canvas fill in pixels or percent
     # render mode is more accurate but more time consuming
-    def get_px_filled(self, percent: bool=True, render: bool=True) -> int:
+    def get_px_filled(self, render: bool=True) -> int:
         if render:
             comp = self.render(self.config).convert('L')
             fill = np.count_nonzero(comp)
         else:
             fill = sum([l.px_filled for l in self.layers])
-        if percent:
-            fill /= (self.config["outputSize"][0] * self.config["outputSize"][1])
         return fill
         
     # saves the object for future use

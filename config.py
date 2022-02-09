@@ -7,6 +7,14 @@ DATASET_CONFIG = load_json(DATASET_CONFIG_PATH)
 GENERATOR_CONFIG_PATH = "config/generator_config.json"
 GENERATOR_CONFIG_DEFAULT = load_json(GENERATOR_CONFIG_PATH)
 
+# a production-ready version of render config for generating final assets
+RENDER_CONFIG_PATH = "config/render_config.json"
+RENDER_CONFIG_DEFAULT = load_json(RENDER_CONFIG_PATH)
+
+# parameters for combining and generating new NFTs
+NFT_CONFIG_PATH = "config/nft_config.json"
+NFT_CONFIG_DEFAULT = load_json(NFT_CONFIG_PATH)
+
 LSTM_CONFIG_PATH = "config/lstm_config.json"
 LSTM_CONFIG = load_json(LSTM_CONFIG_PATH)
 

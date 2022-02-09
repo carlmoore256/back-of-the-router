@@ -178,10 +178,13 @@ def fill_target_attributes(botrGen: BOTR, attributes: dict,
 
 # fill a botr with a set of attributes to to target
 def fill_target_attributes_fast(botrGen: BOTR, attributes: dict, 
-                                comp_target_fill: float=0.96,
-                                overstep_limit: float=1.25) -> None:
+                                comp_target_fill: float=0.85,
+                                overstep_lim: float=1.25) -> None:
     total_px = QUICK_RENDER['outputSize'][0]*QUICK_RENDER['outputSize'][1]
     for categ, target_fill in attributes.items():
+        # because the dict of categ will be ordered, we can increase the
+        # tolerance as the categories become less significant
+        overstep_lim += overstep_lim * 0.1 
         layer_fill = 0
         layers = []
         search_opts = {
@@ -219,8 +222,8 @@ def fill_target_attributes_fast(botrGen: BOTR, attributes: dict,
 
             print(f'Total: %{total_fill * 100} Layers: {len(botrGen.layers)} Filling {categ} - %{fill_ratio * 100}')
             if layer_fill > target_fill:
-                if (fill_ratio) > overstep_limit:
-                    print(f'Overstepped %{(fill_ratio*100)-100} removing layer...')
+                if (fill_ratio) > overstep_lim:
+                    # print(f'Overstepped %{(fill_ratio*100)-100} removing layer...')
                     botrGen.layers.remove(layer)
                     layers.pop(-1)
                 else:
@@ -233,25 +236,45 @@ def fill_to_target(botrGen: BOTR, search_opts: dict,
                     target_fill=0.95, render_config: dict=MEDIUM_RENDER):
 
     total_px = render_config['outputSize'][0]*render_config['outputSize'][1]
-    
+    batch_size = 8
     while True:
-        example, ann = botrGen.Dataset.get_example_target_area(
-                area_target = search_opts['areaTarget'],
-                area_tolerance = search_opts['areaTolerance'],
-                ann_type = search_opts['ann_type'])
-        if ann in search_opts['exclusions']:
-            continue
-
-        layer = BOTR_Layer(botrGen, example, ann)
-        botrGen.append_layer(layer)
-
+        batch_layers = []
+        for _ in range(batch_size):
+            example, ann = botrGen.Dataset.get_example_target_area(
+                    area_target = search_opts['areaTarget'],
+                    area_tolerance = search_opts['areaTolerance'],
+                    ann_type = search_opts['ann_type'])
+            if ann in search_opts['exclusions']:
+                continue
+            layer = BOTR_Layer(botrGen, example, ann)
+            batch_layers.append(layer)
+            botrGen.append_layer(layer)
         rend = botrGen.render(render_config)
-
+        # botrGen.layers.clean_invisible(1)
+        # batch render to make everything faster
+        for layer in batch_layers:
+            if layer.percentage_fill() < 1e-4:
+                botrGen.layers.remove(layer)
         total_fill = image_nonzero_px(rend) / total_px
+        print(f'Filling to target: %{(total_fill * 100):.4f}/{target_fill * 100} Layers: {len(botrGen.layers)}')
         if total_fill > target_fill:
             return
 
+# uses 2 different methods to fill the botr
+def render_matching_botr(botrGen: BOTR, child_attrs: dict, inheritence_fill: float=0.75,
+                            target_fill: float=0.99, overstep_lim: float=1.25) -> None:
+    # fill up comp with matching attributes (with a separate target fill)
+    fill_target_attributes_fast(botrGen, 
+                child_attrs, comp_target_fill=inheritence_fill, 
+                overstep_lim=overstep_lim)
 
-        if total_fill > 0.99:
-            return
-        image_nonzero_px(rend) / total_px
+    exclusions = [k for k, v in child_attrs.items() if v < 1e-5]
+    print(f'EXCLUSIONS {exclusions}')
+    # clean up any remaining background with random fills
+    search_opts = {
+        "areaTarget" : 0.05,
+        "areaTolerance" : 0.3,
+        "ann_type" : "any",
+        "exclusions" : exclusions }
+    fill_to_target(botrGen, search_opts, 
+                    target_fill, render_config=MEDIUM_RENDER)

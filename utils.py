@@ -105,8 +105,6 @@ def load_image_cv2(path):
     return img
 
 def save_asset_metadata_pair(path, image, metadata, metaplex=True):
-
-
     index = 0
     while True:
         png_path = os.path.join(path, f"{str(index)}.png")
@@ -133,6 +131,7 @@ def save_asset_metadata_pair(path, image, metadata, metaplex=True):
             break
         else:
             index += 1
+    return png_path, json_path
 
     # all_pngs = glob.glob(f"{path}/*.png")
     # all_jsons = glob.glob(f"{path}/*.json")

@@ -159,3 +159,4 @@ ignore/
 config/assets/
 rendering.ipynb
 nft.ipynb
+deployment.ipynb

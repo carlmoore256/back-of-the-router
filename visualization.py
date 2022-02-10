@@ -1,7 +1,34 @@
 import plotly.graph_objects as go
 import matplotlib.pyplot as plt
+from utils import print_pretty
+from metaplex import reverse_metaplex_attributes
 
-from metaplex import reverse_metaplex_attributes, avg_attributes, sum_attributes, attrs_difference
+def imshow(img, title='', size=(10,10)):
+    plt.figure(figsize=size)
+    plt.title(title)
+    plt.imshow(img)
+    plt.xticks([])
+    plt.yticks([])
+    plt.show()
+
+
+def display_multiple_images(images=[], titles=[], size=(20,10)):
+    plt.figure(figsize=size)
+    for i in range(len(images)):
+        plt.subplot(1,len(images), i+1)
+        plt.title(titles[i])
+        plt.imshow(images[i])
+        plt.xticks([])
+        plt.yticks([])
+    plt.show()
+    plt.close()
+
+def display_image_meta(image, metadata, size=(10,10)):
+    imshow(
+        image, 
+        f"{metadata['symbol']} : {metadata['name']}",
+        size)
+    print_pretty(metadata)
 
 def attribute_breakdown(attrs: dict, 
             title: str="", metaplex: bool=True) -> None:
@@ -17,25 +44,13 @@ def attribute_breakdown(attrs: dict,
     fig.update_layout(title = title)
     fig.show()
 
-def graph_parent_child_genetics(attrs_parent_1, attrs_parent_2, attrs_child):
-    # attrs_1_sort = collections.OrderedDict(sorted(attrs_parent_1.items()))
-    # attrs_2_sort = collections.OrderedDict(sorted(attrs_parent_2.items()))
-    # child_attr_sort = collections.OrderedDict(sorted(attrs_child.items()))
-    keys = list(attrs_parent_1.keys())
+def graph_attributes(attributes=[], names=[], figsize=(12,3)):
+    keys = list(attributes[0].keys())
     values = range(len(keys))
-    plt.figure(figsize=(12,3))
-    # plt.subplot(3,1,1)
-    plt.plot(attrs_parent_1.values(), label="nft-1", color='red')
-    plt.plot(attrs_parent_2.values(), label="nft-2", color='orange')
-    plt.plot(attrs_child.values(), label="child-generated", color='blue')
-    plt.xticks(values, keys, rotation=75)
-    plt.legend(loc="upper right")
-    plt.show()
-    parent_avgs = attrs_difference(attrs_1_sort, attrs_2_sort)
-    parent_avgs = {k: (v[0]+v[1])/2 for k, v in parent_avgs.items()}
-    plt.figure(figsize=(12,3))
-    plt.plot(parent_avgs.values(), label="parent-avg", color='red')
-    plt.plot(child_attr_sort.values(), label="child-generated", color='green')
+    plt.figure(figsize=figsize)
+    for name, attr in zip(names, attributes):
+
+        plt.plot(attr.values(), label=name)
     plt.xticks(values, keys, rotation=75)
     plt.legend(loc="upper right")
     plt.show()

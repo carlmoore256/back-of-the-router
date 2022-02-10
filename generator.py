@@ -1,5 +1,5 @@
-from utils import display_multiple_images
-from metaplex import save_asset_metadata_pair
+from visualization import display_multiple_images
+from metaplex import save_metaplex_assets
 from coco_utils import load_coco_image, closest_sized_annotation
 from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent, add_images, mask_image
 from dataset import Dataset, filter_annotation_categories, get_annotation_supercategory, composition_attributes
@@ -131,7 +131,7 @@ class BOTR_Generator():
         composite = mask_add_composite(image, exclusionMask, composite)
 
       # layer = BOTR_Layer(botr, cocoExample, chosenAnn, exclusionMask, compositeMask)
-      layer = BOTR_Layer(botr, cocoExample, chosenAnn)
+      layer = BOTR_Layer(cocoExample, chosenAnn)
       botr.append_layer(layer)
 
       compositeMask = np.logical_or(exclusionMask, compositeMask).astype(np.uint8)
@@ -172,6 +172,6 @@ class BOTR_Generator():
     # metadata["description"] = description
 
     if outpath is not None:
-      save_asset_metadata_pair(outpath, image, metadata)
+      save_metaplex_assets(outpath, image, metadata)
     return image, metadata, botr
 

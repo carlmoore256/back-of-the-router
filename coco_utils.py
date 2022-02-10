@@ -1,4 +1,5 @@
 # from utils import load_coco_info
+from pycoco_custom import mask as maskUtils
 from utils import save_object, load_object, load_json, save_json, filter_dict_by
 from config import DATASET_CONFIG, SUPERCATEGORIES
 from pycocotools.coco import COCO
@@ -195,6 +196,37 @@ def generate_assets():
     if not os.path.isfile(DATASET_CONFIG["category_map"]):
         cat_map = category_map(coco_stuff, coco_instances) 
         save_object(cat_map, DATASET_CONFIG["category_map"])
+
+# extension of coco mask
+def annToRLE(ann, img_dims):
+    """
+    Convert annotation which can be polygons, uncompressed RLE to RLE.
+    :return: binary mask (numpy 2D array)
+    """
+    h = img_dims[0]
+    w = img_dims[1]
+    segm = ann['segmentation']
+    if type(segm) == list:
+        # polygon -- a single object might consist of multiple parts
+        # we merge all parts into one mask rle code
+        rles = maskUtils.frPyObjects(segm, h, w)
+        rle = maskUtils.merge(rles)
+    elif type(segm['counts']) == list:
+        # uncompressed RLE
+        rle = maskUtils.frPyObjects(segm, h, w)
+    else:
+        # rle
+        rle = ann['segmentation']
+    return rle
+
+def annToMask(ann, img_dims):
+    """
+    Convert annotation which can be polygons, uncompressed RLE, or RLE to binary mask.
+    :return: binary mask (numpy 2D array)
+    """
+    rle = annToRLE(ann, img_dims)
+    m = maskUtils.decode(rle)
+    return m
 
 # sort coco dataset in desired BOTR format, serialize and save
 if __name__ == "__main__":

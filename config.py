@@ -29,16 +29,26 @@ HOMUNCULI_API = {
   }
 }
 
+DEFAULT_SEARCH_OPTS = {
+    "areaTarget" : 0.07,
+    "areaTolerance" : 0.01,
+    "posTarget" : [0.5, 0.5], # normalized target
+    "posTolerance" : 1,
+    "ann_type" : "any",
+    "exclusions" : ["person", "animal", "vehicle", "sports", "other"]
+}
+
+# basis points / 100 = percentage
 
 METAPLEX_CONFIG = {
     'symbol' : 'BOTR',
-    'description' : 'Confusing images',
-    'seller_fee_basis_points' : 0,
+    'description' : 'Algorithmically generated visual confusion',
+    'seller_fee_basis_points' : 700,
     'external_url' : 'homunculi.org/art',
     'collection_name' : 'Back-of-the-Router',
     'collection_family' : 'Homunculi',
     'category' : 'image',
-    'royalties' : [] 
+    'royalties' : NFT_CONFIG_DEFAULT["nft_creators"]
 }
 
 # all available coco supercategories

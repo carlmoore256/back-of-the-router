@@ -1,7 +1,8 @@
 import numpy as np
 from scipy.signal import convolve2d
-from utils import display_multiple_images
+from visualization import display_multiple_images
 import cv2
+import threading
 
 LEVEL_STEP = 2
 
@@ -24,9 +25,7 @@ def create_kernel(l=5, sig=1.):
 def generate_pyramid(image, kernel, max_depth=None):
   G = [image,]
   L = []
-
   depth = 0
-
   while image.shape[0] > 2 and image.shape[1] > 2:
     if max_depth is not None and depth == max_depth:
       break
@@ -36,7 +35,6 @@ def generate_pyramid(image, kernel, max_depth=None):
 
   for i in range(len(G)-1):
     L.append(G[i] - interpolate(G[i+1], kernel))
-
   return G[:-1], L
 
 # gaussian is the final image in the gaussian pyramid
@@ -66,7 +64,7 @@ def blur_mask(mask, kernel, steps=1):
 
 def blend_masked(
   img_A, img_B, mask_A, mask_B,
-  blendConfig):
+  blendConfig, composite, channel):
 
   pyrKernel = create_kernel(
     blendConfig['pyr_kernel_size'], blendConfig['pyr_kernel_sigma'])
@@ -106,8 +104,9 @@ def blend_masked(
                       ['l_1', 'l_2', 'mask_A', 'mask_B', 'blended'])
   
   blended_L = blended_L[::-1]
-  recon = reconstruct(img1_G[-1], blended_L, pyrKernel)
-  return recon
+  # recon = reconstruct(img1_G[-1], blended_L, pyrKernel)
+  composite[:, :, channel] = reconstruct(img1_G[-1], blended_L, pyrKernel)
+  # return recon
 
 def normalize_values(values):
   values = (values - np.min(values)) / (np.max(values) - np.min(values))
@@ -134,16 +133,21 @@ def blend_masked_rgb(img_A, img_B,
     mask_A = cv2.GaussianBlur(mask_A/255, (blendConfig['blurMaskPreKernel'], blendConfig['blurMaskPreKernel']), 0)
     mask_A = np.expand_dims(mask_A, -1)
 
-
   img_A = to_float_range(img_A)
   img_B = to_float_range(img_B)
-  blended_rgb = []
+  composite = np.zeros_like(img_A)
+
+  threads = []
   for channel in range(3):
-    blended = blend_masked(
+    t = threading.Thread(target=blend_masked, args=(
         img_A[:,:,channel], img_B[:,:,channel], 
-        mask_A, mask_B, blendConfig)
-    blended_rgb.append(blended)
-  blended_rgb = np.stack(blended_rgb, axis=-1)
-  # blended_rgb = normalize_values(blended_rgb)
-  blended_rgb = to_uint8_range(blended_rgb)
-  return blended_rgb
+        mask_A, mask_B, blendConfig, 
+        composite, channel))
+    threads.append(t)
+    t.start()
+
+  for thread in threads:
+    thread.join()
+  
+  composite = to_uint8_range(composite)
+  return composite

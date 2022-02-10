@@ -36,11 +36,6 @@ class Dataset():
         self.distInstances, self.meanAreaInstances, self.stdAreaInstances = coco_value_distribution(
         self.coco_examples, key="instance_ann")
 
-
-        # self.all_centers = {}
-        # for id, example in self.coco_examples.items():
-        #     self.all_centers[id] = example.get_annotation_centers("any")
-
     # get an example coco image, if no id is provided return a random one
     def get_coco_example(self, id: int=None) -> COCO_Example:
         if id is None:
@@ -59,13 +54,19 @@ class Dataset():
 
     # get a list of coco annotations and matching examples within an area constriant
     def candidates_target_area(self, example=None, area_target: float=0.05, 
-                                area_tolerance: float=0.01, ann_type="any", sort=True):
+                                area_tolerance: float=0.01, ann_type="any", 
+                                sort=True, allowed_categ: list=None, limit: int=None):
         candidates = {}
         for _, [id, example] in enumerate(self.coco_examples.items()):
             ann, area = example.closest_ann_area(area_target, ann_type)
             if abs(area - area_target) < area_tolerance:
                 # candidates.append([example, ann])
-                candidates[example] = ann
+                if allowed_categ is None:
+                    candidates[example] = ann
+                elif get_annotation_supercategory(ann) in allowed_categ:
+                    candidates[example] = ann
+                if limit is not None and len(candidates) == limit:
+                    break
         if len(candidates) > 0:
             if sort:
                 candidates = {
@@ -73,7 +74,7 @@ class Dataset():
                     sorted(candidates.items(), key=lambda item: item[0].get_annotation_area(item[1]))
                     }
             return candidates
-        return None, None
+        return None
 
     # get a list of coco annotations and matching examples within a position constraint
     def candidates_target_pos(self, example=None, pos_target: float=[],
@@ -157,13 +158,6 @@ class Dataset():
 # generates an empty attribute dict
 def composition_attributes():
     return { cat["supercategory"]: 0 for cat in COCO_CATEGORIES.values() }
-    # attributes = {
-    #     "category_percentage": 
-    #     {   cat["supercategory"]: 0 for cat in COCO_CATEGORIES.values() }}
-    # return attributes
-
-    # attributes['text_metadata'] = {
-    #     "objects" : [], "descriptions" : [] }
 
 def get_annotation_supercategory(annotation):
     name = COCO_CATEGORIES[annotation["category_id"]]["supercategory"]

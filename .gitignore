@@ -155,8 +155,11 @@ saved_models/
 temp/
 wandb/
 
+assets/
 ignore/
 config/assets/
 rendering.ipynb
 nft.ipynb
 deployment.ipynb
+
+stats.ipynb

@@ -1,9 +1,6 @@
-from torch import normal
 from coco_utils import load_coco_image, get_annotation_center
-# from dataset import get_annotation_supercategory
-from utils import display_multiple_images, imshow, sort_dict
-# from dataset import get_annotation_supercategory
-import numpy as np
+from visualization import imshow
+from utils import sort_dict
 import random
 import math
 

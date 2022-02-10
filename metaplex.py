@@ -1,9 +1,11 @@
 import json
 from collections import OrderedDict
+from lib2to3.pgen2.tokenize import generate_tokens
 import os
-from utils import save_json
+from utils import load_json, save_json, get_all_files, get_asset_pair_path, save_object, check_make_dir
 from config import METAPLEX_CONFIG
 from PIL import Image
+from nanoid import generate as generate_id
 
 # changes a dictionary with values into the metaplex format:
 # [ {"trait_type" : v, "value" : v} , {}, ... ]
@@ -28,33 +30,34 @@ def remaining_royalty_share(royalties):
     return 100-total
 
 # def calculate_royalty_points():
+# image (png, gif, svg, jpg), video (mp4, mov), audio (mp3, flac, wav), vr (glb, gltf)
+FILE_TYPES = {
+   "mp4" : "video/mp4",
+   "mov" : "video/mov",
+   "png" : "image/png",
+   "gif" : "image/gif",
+   "svg" : "image/svg",
+   "jpg" : "image/jpg",
+   "mp3" : "audio/mp3",
+   "flac" : "audio/flac",
+   "wav" : "audio/wav",
+   "glb" : "vr/glb",
+   "gltf" : "vr/gltf"
+}
 
+def get_file_type(file: str) -> str:
+    ext = os.path.splitext(os.path.split(file)[-1])[-1]
+    if ext in FILE_TYPES.keys():
+        return FILE_TYPES[ext]
+    return "unknown"
 
-def format_file_list(files):
-    f_list = []
-    for f in files:
-        f_type = None
-        if f.endswith("mp4"):
-            f_type = "video/mp4"
-        if f.endswith("png"):
-            f_type = "image/png"
-        f_list.append({"uri" : f, "type": f_type})
-    return f_list
+def format_file_list(files: list) -> list:
+    return [{"uri" : f, "type": get_file_type(f)} for f in files]
 
-def format_royalties(creators, shares):
-    c_list = []
-    for c, s in zip(creators, shares):
-        c_list.append({
-            "address": c,
-            "share": s
-        })
-    return c_list
+def format_royalties(creators: list, shares: list) -> list:
+    return [{"address" : c, "share": s} for c, s in zip(creators, shares)]
 
-def format_botr_metaplex(botr_data, image_uri, animation_url, website_url="homunculi.org/art"):
-    attributes = metaplex_attributes(botr_data['composition'])
-    return attributes
-
-
+# other properties should be provided as [["property-name", [{prop-prototype},{},...], [], ...]
 def generate_metadata(
     name = '',
     symbol = '',
@@ -68,7 +71,8 @@ def generate_metadata(
     collection_family = 'Homunculi',
     files = [],
     category = 'image',
-    royalties = []):
+    royalties = [],
+    other_properties: list=None) -> dict:
 
     file_list = format_file_list(files)
 
@@ -92,6 +96,9 @@ def generate_metadata(
             "creators": royalties
         }
     }
+    if other_properties is not None:
+        for name, property in other_properties:
+            metadata["properties"][name] = property
     return metadata
 
 # =============== Helpers ====================================
@@ -111,6 +118,37 @@ def sort_order_attributes(metaplex_attrs) -> OrderedDict:
     attrs = reverse_metaplex_attributes(metaplex_attrs)
     return OrderedDict(sorted(attrs.items()))
 
+def save_metaplex_assets(base_path: str, image: Image, 
+                        metadata: dict, obj: dict=None) -> list:
+    idx, [img_path, json_path] = get_asset_pair_path(base_path)
+    files = [img_path]
+
+    identifier = generate_id(size=10)
+
+    # contains some data that all homunculi nfts will have
+    other_properties = [["homunculi",  {"identifier" : identifier }],]
+
+    metadata = generate_metadata(
+        name = f"{METAPLEX_CONFIG['symbol']} #{idx+1:03d}",
+        symbol = METAPLEX_CONFIG['symbol'],
+        description = f"{metadata['text']['name']}: {metadata['text']['description']}",
+        seller_fee_basis_points = METAPLEX_CONFIG['seller_fee_basis_points'],
+        image_file = img_path,
+        animation_path = '',
+        external_url = METAPLEX_CONFIG['external_url'],
+        attributes = metaplex_attributes(metadata['composition']),
+        collection_name = METAPLEX_CONFIG['collection_name'],
+        collection_family = METAPLEX_CONFIG['collection_family'],
+        files = [img_path],
+        category = METAPLEX_CONFIG['category'],
+        royalties = METAPLEX_CONFIG['royalties'],
+        other_properties=other_properties)
+    image.save(img_path)
+    save_json(json_path, metadata)
+    print(f"saved image and metadata pair: {img_path} {json_path}")
+    return idx, [img_path, json_path], metadata
+
+# deprecated, use save_asset_pair
 def save_asset_metadata_pair(path: str, image: Image, metadata: dict):
     index = 0
     while True:
@@ -119,9 +157,9 @@ def save_asset_metadata_pair(path: str, image: Image, metadata: dict):
         if not os.path.isfile(png_path) and not os.path.isfile(json_path):
 
             metadata = generate_metadata(
-                name = metadata['text']['name'],
+                name = f"{METAPLEX_CONFIG['symbol']} #{index+1:03d}",
                 symbol = METAPLEX_CONFIG['symbol'],
-                description = METAPLEX_CONFIG['description'],
+                description = f"{metadata['text']['name']}: {metadata['text']['description']}",
                 seller_fee_basis_points = METAPLEX_CONFIG['seller_fee_basis_points'],
                 image_file = png_path,
                 animation_path = '',
@@ -139,35 +177,13 @@ def save_asset_metadata_pair(path: str, image: Image, metadata: dict):
         else:
             index += 1
     return png_path, json_path
-# =============== Interfaces ==================================
 
-
-# METAPLEX_ATTRS = {
-#     'symbol' : 'BOTR',
-#     'description' : 'Confusing images',
-#     'seller_fee_basis_points' : 0,
-#     'external_url' : 'homunculi.org/art',
-#     'collection_name' : 'Back-of-the-Router',
-#     'collection_family' : 'Homunculi',
-#     'category' : 'image',
-#     'royalties' : format_royalties(["6TNtaPn8MEaBvekb7PzFnPTm6aTHdvFmSBoRznjETjXK"],[100]) 
-# }
-
-
-if __name__ == "__main__":
-    royalties = format_royalties(
-        ["6TNtaPn8MEaBvekb7PzFnPTm6aTHdvFmSBoRznjETjXK"], [100])
-    metadata = generate_metadata(
-        name = '',
-        symbol = '',
-        description = '',
-        seller_fee_basis_points = 0,
-        image_file = '',
-        animation_path = '',
-        external_url = 'homunculi.org/art',
-        attributes = [],
-        collection_name = '',
-        collection_family = 'Homunculi',
-        files = [],
-        category = 'image',
-        royalties = royalties)
+# change metadata files in a given path to have a royalty config
+def change_royalties_existing_meta(asset_path="assets/", 
+                    royalties=METAPLEX_CONFIG['royalties']):
+    files = get_all_files(asset_path, "json")
+    for f in files:
+        print(f'modifying royalties for {f}')
+        meta = load_json(f)
+        meta['properties']['creators'] = royalties
+        save_json(f, meta)

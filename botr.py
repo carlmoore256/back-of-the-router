@@ -1,82 +1,64 @@
-
-from copy import copy, deepcopy
-import enum
-import sys
-
-import plotly.graph_objects as go
-import random
-import cv2
-from skimage.exposure import histogram
-import math
-
-from torch import normal
-
-from dataset import composition_attributes, get_annotation_supercategory
+from copy import copy
 import numpy as np
-from skimage.exposure import match_histograms, cumulative_distribution, equalize_adapthist
-from skimage import img_as_float
-from metaplex import generate_metadata, save_asset_metadata_pair
-from pyramids import blend_masked_rgb
-from masking import resize_fit, create_exclusion_mask, mask_add_composite, calc_fill_percent, add_images, mask_image
-from utils import print_pretty, remove_file, save_object, find_nearest, sort_dict 
-from utils import imshow, load_json, load_object, get_obj_size, image_nonzero_px, arr2d_to_img
-from coco_utils import model_path, get_annotation_center
-from language_model import LSTMTagger, generate_description_lstm
+import random
+from tqdm import tqdm
+
+from skimage.exposure import histogram, match_histograms
+from cv2 import dilate, GaussianBlur
+from PIL import Image
+
+from utils import save_object, load_object, image_nonzero_px, arr2d_to_img
+from coco_utils import model_path, get_annotation_center, annToMask
+from dataset import composition_attributes, get_annotation_supercategory
+from metaplex import save_metaplex_assets
+from language_model import LSTMTagger
 from language_processing import tokenize_sentence
 from markov_language import Markov
+from pyramids import blend_masked_rgb
+from masking import resize_fit, create_exclusion_mask, mask_add_composite
 from postprocessing import sharpen_image, jpeg_decimation, adaptive_hist, image_histogram
-from visualization import attribute_breakdown
-from PIL import Image, ImageOps
-from tqdm import tqdm
+from visualization import attribute_breakdown, imshow
+
 from config import LSTM_CONFIG
 
-from time import perf_counter
-
-
 VOCAB_INFO = load_object(model_path("vocab_info"))
+
 class BOTR_Layer():
-    # add ability to move image components around
     # add ability to have this object determine which layers
     # get objects by area and relocate them
-    def __init__(self, BOTR, coco_example, annotation=None):
-        self.BOTR = BOTR
-        self.coco_example = coco_example
-        if annotation is None:
-            annotation = coco_example.get_random_annotation(key=BOTR.config['ann_key'])
-        self.annotation = annotation
-        self.center = get_annotation_center(annotation)
-        self.px_filled = 0
-
-        self.raster = None
-
-    # def recenter_annotation(self, center):
-    #     current_ctr = get_annotation_center(self.annotation)
-
-    def change_example(self, coco_example):
-        # search the space for a certain kind of example
-        # self.coco_example = BOTR.
-        self.coco_example = coco_example
-        
+    def __init__(self, coco_example=None, annotation=None, save_data=None):
+        if save_data is not None:
+            self.load_save_data(save_data)
+        elif coco_example is not None:
+            self.coco_example = coco_example
+            if annotation is None:
+                annotation = coco_example.get_random_annotation() # key=BOTR.config['ann_key']
+            self.annotation = annotation
+            self.center = get_annotation_center(annotation)
+            self.px_filled = 0
+            self.raster = None
+        else:
+            print(f'Failed to create layer, provide an example')
 
     # iterate through coco examples to find annotation with similar visual properties
-    def find_similar_annotation(self, area_tolerance=0.01, pos_tolerance=0.01) -> bool:
-        found_similar = False
-        for i, example in enumerate(self.BOTR.Dataset):
-            if example == self.coco_example or len(example.areas_all) == 0:
-                continue
-            current_area = self.coco_example.get_annotation_area(self.annotation)
-            new_ann, area = example.closest_ann_area(current_area)
-            areaDiff = abs(area - current_area)
-            if areaDiff < area_tolerance:
-                new_ctr = get_annotation_center(new_ann)
-                dist = math.dist(new_ctr, self.center)
-                if dist < pos_tolerance:
-                    self.coco_example = example
-                    self.annotation = new_ann
-                    self.center = new_ctr
-                    found_similar = True
-                    break
-        return found_similar
+    # def find_similar_annotation(self, area_tolerance=0.01, pos_tolerance=0.01) -> bool:
+    #     found_similar = False
+    #     for i, example in enumerate(self.BOTR.Dataset):
+    #         if example == self.coco_example or len(example.areas_all) == 0:
+    #             continue
+    #         current_area = self.coco_example.get_annotation_area(self.annotation)
+    #         new_ann, area = example.closest_ann_area(current_area)
+    #         areaDiff = abs(area - current_area)
+    #         if areaDiff < area_tolerance:
+    #             new_ctr = get_annotation_center(new_ann)
+    #             dist = math.dist(new_ctr, self.center)
+    #             if dist < pos_tolerance:
+    #                 self.coco_example = example
+    #                 self.annotation = new_ann
+    #                 self.center = new_ctr
+    #                 found_similar = True
+    #                 break
+    #     return found_similar
 
     def shuffle_ann(self):
         self.annotation = self.coco_example.get_random_annotation()
@@ -84,11 +66,6 @@ class BOTR_Layer():
     def update_raster(self, raster):
         self.raster = arr2d_to_img(raster)
         self.px_filled = image_nonzero_px(self.raster) / (raster.shape[0] * raster.shape[1])
-        # raster *= 255
-        # raster = np.clip(raster, 0, 255).astype(np.uint8)
-        # bw = np.asarray(ImageOps.grayscale(Image.fromarray(raster)))
-        # self.px_filled = image_nonzero_px(Image.fromarray(raster))
-        # self.px_filled = np.count_nonzero(bw) / (raster.shape[0] * raster.shape[1])
 
     def update_mask(self, compositeMask=None):
         if compositeMask is not None:
@@ -97,14 +74,13 @@ class BOTR_Layer():
             # self.px_filled = np.count_nonzero(exclusionMask)
             return exclusionMask
         else:
-            return self.BOTR.get_mask(self.annotation)
+            return self.get_mask(self.annotation)
 
     def dominant_color(self, fit=[256,256]):
         img = self.mask_image(fit)
         hist = histogram(img, channel_axis=-1, normalize=True)[0]
         avg = np.mean(hist, axis=0)
         print(np.argmax(avg))
-
         return hist, img
 
     # ======== masking =================================
@@ -115,7 +91,7 @@ class BOTR_Layer():
 
     # raw mask layer without exclusion mask
     def get_mask(self, fit=None):
-        mask = self.BOTR.get_mask(self.annotation)
+        mask = annToMask(self.annotation, self.coco_example.data['dims'])
         if fit is not None:
             mask = resize_fit(mask, [fit[0], fit[1]])
         return mask
@@ -135,6 +111,19 @@ class BOTR_Layer():
 
     def percentage_fill(self):
         return self.px_filled
+
+    def get_save_data(self) -> dict:
+        return {
+            "ann_id" : self.annotation['id'],
+            "coco_example" : self.coco_example, # yes, this is wrong and confusing
+            "px_filled" : self.px_filled }
+    
+    def load_save_data(self, data) -> None:
+        self.coco_example = data["coco_example"]
+        self.annotation = self.coco_example.annotation_by_id(data["ann_id"])
+        self.px_filled = data["px_filled"]
+        self.center = get_annotation_center(self.annotation)
+        self.raster = None
 
 # ************************************************************
 # Class containing a list of botr layers, extending
@@ -163,6 +152,25 @@ class Layers():
     def shuffle_order(self):
         random.shuffle(self.layers)
 
+    def get_order(self):
+        return {i: l for i, l in enumerate(self.layers)}
+
+    def set_order(self, order):
+        for idx, layer in order.items():
+            self.layers[idx] = layer
+
+    def get_save_data(self) -> list:
+        return [l.get_save_data() for l in self.layers]
+
+    def load_save_data(self, layer_data: list, reset=True):
+        if reset:
+            self.layers.clear()
+        print(f"restoring {len(layer_data)} layers")
+        pbar = tqdm(total=len(layer_data))
+        for save_data in layer_data:
+            self.layers.append(BOTR_Layer(save_data=save_data))
+            pbar.update(1)
+
     def find_new_items(self, area_tolerance=0.01, pos_tolerance=0.01):
         print(f'=> finding similar annotations for {len(self.layers)} layers')
         found = 0
@@ -174,7 +182,6 @@ class Layers():
                 found += 1
         print(f'=> replaced {found} annotations')
     
-
     # remove n smallest images from canvas
     def remove_smallest_n(self, n: int=1):
         sizes = [l.px_filled for l in self.layers]
@@ -188,6 +195,11 @@ class Layers():
         for layer in remove:
             self.layers.remove(layer)
         print(f'removed {len(remove)} layers from canvas')
+
+    # fill distribution regardless of category
+    def fill_distribution(self):
+        return [l.percentage_fill() for l in self.layers]
+        
 
 # ************************************************************
 # An object that contains rasterized generated assets created
@@ -203,11 +215,10 @@ class GeneratedItem():
         imshow(self.image, self.metadata['text']['name'])
         print(f'Description: {self.metadata["text"]["description"]}')
 
-    def save(self, outpath):
-        return save_asset_metadata_pair(
-            outpath,
-            self.image,
-            self.metadata)
+    # def save(self, outpath, botr_path=None):
+    #     return save_asset_pair(
+    #                 outpath, self.image, 
+    #                 self.metadata, botr_path)
 
     def set_name(self, name: str) -> None:
         self.metadata['text']["name"] = name
@@ -215,9 +226,12 @@ class GeneratedItem():
     def set_description(self, description: str) -> None:
         self.metadata['text']["description"] = description
 
-    def display_categories(self):
+    def category_breakdown(self):
         attribute_breakdown(self.metadata["composition"],
                     title=self.metadata['name'], metaplex=False)
+
+    def distribution_std(self):
+       return abs(np.std(list(self.metadata["composition"].values())))
 
 # ************************************************************
 # An object that contains parameters and layers for
@@ -225,18 +239,20 @@ class GeneratedItem():
 # ************************************************************
 class BOTR():
   
-    def __init__(self, config, dataset):
-        # self.layers = []
-        self.layers: Layers = Layers()
-        self.config = config
-        self.Dataset = dataset
-        self.textMetadata = { "name" : "", "description" : "" }
-        self.metadata = self.generate_metadata(config)
-        # self.image = None
-        self.history: GeneratedItem = [] # contains a generated botr and description
-        self.generatedItem: GeneratedItem = None
+    def __init__(self, config=None, dataset=None, load_data=None):
+        if load_data is not None:
+            self.load_botr(load_data)
+        else:
+            self.layers: Layers = Layers()
+            self.config = config
+            self.textMetadata = { "name" : "", "description" : "" }
+            self.metadata = self.generate_metadata(config)
+            self.history: GeneratedItem = [] # contains a generated botr and description
+            self.generatedItem: GeneratedItem = None
+        
         self.title_model = Markov()
-        self.set_description_model(config['descriptionModel'])
+        self.set_description_model(self.config['descriptionModel'])
+        self.Dataset = dataset # eventually remove this
 
     def display(self):
         self.generatedItem.display()
@@ -250,7 +266,7 @@ class BOTR():
             config = self.config
         metadata = {
             # nesting to preserve generated text upon new generations
-            "text" : self.textMetadata,
+            "text" : { "name" : "", "description" : "" },
             "composition" : self.get_composition_attributes(config) }
         return metadata
 
@@ -265,16 +281,7 @@ class BOTR():
         if normalize and self.total_fill > 0:
             attributes = {k: v/self.total_fill for k, v in attributes.items()}
         return attributes
-    
-    # saves the image and metadata assets
-    def save_assets(
-           self, base_path: str, 
-           genItem: GeneratedItem = None) -> None:
-        if genItem is None:
-            genItem = self.generatedItem
-        self.save_state(genItem)
-        png_path, json_path = genItem.save(base_path)
-        return png_path, json_path
+
 
     def set_description_model(self, model: str) -> None:
         if model == 'markov':
@@ -302,7 +309,6 @@ class BOTR():
             modelType: str = None, 
             genItem: GeneratedItem = None) -> str:
 
-        # langParams={"seed" : "A", "iters" : 5, "length" : 10}
         if not modelType:
             self.set_description_model(modelType)
         if not genItem:
@@ -346,6 +352,8 @@ class BOTR():
         min_layer, _ = min(histograms.items(), key=lambda x: abs(mean - x[1]))
         return min_layer
 
+    # ======== render ================================
+
     def render(self, config) -> Image:
 
         composite = np.zeros((config["outputSize"][0], config["outputSize"][1], 3), dtype=np.uint8)
@@ -388,10 +396,10 @@ class BOTR():
             if config['compositeType'] == 'pro':
                 kernel = np.ones((
                     config['proDilateKernel'],config['proDilateKernel']),np.uint8)
-                exclusionMask = cv2.dilate(
+                exclusionMask = dilate(
                     exclusionMask.astype(np.float32), 
                     kernel, iterations = config['proDilateIter'])
-                exclusionMask = cv2.GaussianBlur(
+                exclusionMask = GaussianBlur(
                     exclusionMask/256, (config['proKernel'], config['proKernel']), 0)
                 exclusionMask = np.expand_dims(exclusionMask, -1)
                 excluded = np.clip(image * exclusionMask, 0, 255)
@@ -404,6 +412,8 @@ class BOTR():
 
         composite = Image.fromarray(composite.astype(np.uint8))
         return composite
+
+    # ======== generate ================================
 
     def generate(self, config: dict = None, 
                     newName: bool=True, newDescrip: bool=True) -> GeneratedItem:
@@ -475,8 +485,8 @@ class BOTR():
             self.config = config
             return self.config
 
-    def get_mask(self, ann):
-        return self.Dataset.get_mask(ann)
+    # def get_mask(self, ann):
+    #     return self.Dataset.get_mask(ann)
 
     def append_layer(self, layer : BOTR_Layer):
         self.layers.append(layer)
@@ -490,18 +500,64 @@ class BOTR():
         else:
             fill = sum([l.px_filled for l in self.layers])
         return fill
-        
-    # saves the object for future use
-    def save_botr(self, path: str, del_history: bool=True):
-        # botr_obj = deepcopy(self)
-        botr_obj = copy(self)
-        del botr_obj.Dataset
-        if del_history:
-            del botr_obj.history
-            
-        print(f'SIZE {get_obj_size(botr_obj)}')
-        print(f'SIZE of generated item {get_obj_size(self.generatedItem)}')
-        save_object(botr_obj, f"{path}/{self.generatedItem.metadata['text']['name']}")
+
+    # ======== saving/loading =============================
+
+    # saves the image and metadata pair
+    # DEPRECATED - use save_assets instead
+    def save(self, outpath):
+        print(f'use save_assets() instead')
+        return save_metaplex_assets(
+            outpath,
+            self.image,
+            self.metadata)
+
+    # saves the image and metadata assets
+    def save_assets(self, base_path: str, 
+           genItem: GeneratedItem=None, save_obj: bool=True, 
+           verbose: bool=True) -> None:
+
+        if genItem is None:
+            genItem = self.generatedItem
+        self.save_state(genItem)
+
+        idx, paths, metadata = save_metaplex_assets(base_path, 
+                                        genItem.image, genItem.metadata)
+        if save_obj:
+            ident = metadata["properties"]["homunculi"]["identifier"]
+            filename = f"{base_path}objects/{ident}.pkl"
+            save_object(self.get_save_state(), filename)
+            if verbose:
+                print(f'=> saved BOTR object to {filename}')
+        return idx, paths
+
+    # returns an object containing necessary properties to operate
+    def get_save_state(self, history=False):
+        state = {
+            "layers" : self.layers.get_save_data(),
+            "config" : self.config,
+            "generated_item" : self.generatedItem }
+        if history:
+            state["save_history"] = self.history
+        return state
+
+    # saves the object for future use, choose to save history
+    def save_botr(self, path: str, history: bool=False):
+        save_object(self.get_save_state(history), f"{path}/{self.generatedItem.metadata['text']['name']}")
+
+    # loads a botr from a pickled save file
+    def load_botr(self, path: str):
+        data = load_object(path)
+        self.layers = Layers()
+        self.layers.load_save_data(data['layers'])
+        self.config = data['config']
+        self.generatedItem = data['generated_item']
+        if "save_history" in data.keys():
+            self.history = data["save_history"]
+        else:
+            self.history: GeneratedItem = []
+
+    # ======== iterator functions ============================
 
     def __getitem__(self, idx):
         return self.history[idx]

@@ -2,23 +2,13 @@
 
 import random
 
-from attr import attr
-from construct import max_
-
 from botr import BOTR, BOTR_Layer
 from dataset import Dataset, get_annotation_supercategory
 from utils import image_nonzero_px
 from collections import OrderedDict
 import numpy as np
+from config import DEFAULT_SEARCH_OPTS
 
-SEARCH_OPTS = {
-    "areaTarget" : 0.03,
-    "areaTolerance" : 0.001,
-    "posTarget" : [0.5, 0.5], # normalized target
-    "posTolerance" : 100,
-    "ann_type" : "any",
-    "exclusions" : ["person", "vehicle"]
-}
 
 QUICK_RENDER = {
     'matchHistograms' : False,
@@ -39,6 +29,63 @@ MEDIUM_RENDER = {
     'showProgress' : False,
     "batchRenderSize" : 8
 }
+# =================================================================
+
+DEFAULT_DYNAMIC_PARAMS = {
+    "areaTarget" :  {"func": np.random.uniform, "params" : {"low" : 0.005, "high" : 0.2}},
+    "areaTolerance" : {"func": np.random.uniform, "params" : {"low" : 0.001, "high" : 0.1}},
+    "posTarget" : {"func": None, "params" : None}, # normalized target
+    "posTolerance" : {"func": None, "params" : None}, 
+    "ann_type" :  {"value" : "any" }, # valid option
+    "exclusions" :  {"value": ["person", "animal", "vehicle", "sports", "other"] }
+}
+# =================================================================
+
+class SearchOptions():
+
+    def __init__(self, default_options: dict=DEFAULT_SEARCH_OPTS,
+                        dynamic_params: dict=DEFAULT_DYNAMIC_PARAMS):
+        self.options_dict = default_options
+        self.dynamic_params = dynamic_params
+        self.area_target = default_options["areaTarget"]
+        self.area_tolerance = default_options["areaTolerance"]
+        self.pos_target = default_options["posTarget"]
+        self.pos_tolerance = default_options["posTolerance"]
+        self.ann_type = default_options["ann_type"]
+        self.exclusions = default_options["exclusions"]
+
+    # get original default options supplied (compatibility)
+    def static_options(self):
+        return self.options_dict
+
+    def set_dynamics(self, dynamics_params: dict):
+        self.dynamic_params = dynamics_params
+
+        np.random.uniform(low=0.005, high=0.2, size=(1))
+        np.random.uniform(low=0.001, high=0.1, size=(1))
+
+    # get options that change based on parameters
+    def dynamic_options(self):
+        output_params = {}
+        for k, _ in self.options_dict.items():
+            param = self.dynamic_params[k]
+            if param is None:
+                continue
+            elif not any(v for v in param.values()):
+                continue
+            elif list(param.keys())[0] == "value":
+                output_params[k] = self.dynamic_params[k]["value"]
+                continue
+            func = self.dynamic_params[k]["func"]
+            params = self.dynamic_params[k]["params"]
+            output_params[k] = func(**params)
+        return output_params
+
+    # work in progress - adapt to generative proccess
+    def adaptive_options(self):
+        return None
+
+# =================================================================
 
 def layer_target_area(dataset: Dataset, areaTarget: float=0.03, 
                         tolerance: float = 0.001) -> BOTR_Layer:

@@ -7,7 +7,7 @@ from skimage.exposure import histogram, match_histograms
 from cv2 import dilate, GaussianBlur
 from PIL import Image
 
-from utils import save_object, load_object, image_nonzero_px, arr2d_to_img
+from utils import save_object, load_object, image_nonzero_px, arr2d_to_img, check_make_dir
 from coco_utils import model_path, get_annotation_center, annToMask
 from dataset import composition_attributes, get_annotation_supercategory
 from metaplex import save_metaplex_assets
@@ -521,6 +521,7 @@ class BOTR():
             genItem = self.generatedItem
         self.save_state(genItem)
 
+        check_make_dir(base_path)
         idx, paths, metadata = save_metaplex_assets(base_path, 
                                         genItem.image, genItem.metadata)
         if save_obj:

@@ -8,3 +8,5 @@ natsort
 nltk >= 3.6.7
 nanoid
 pickle5
+wandb
+scikit-image >= 0.19.1

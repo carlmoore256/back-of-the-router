@@ -6,11 +6,20 @@ from zipfile import ZipFile
 from tqdm import tqdm
 import numpy as np
 import requests
+import random
 import shutil
 import pickle5 as pickle
 import json
 import glob
 import os
+
+# sample randomly from a set of strings, exponential adds a bias
+def random_subset(str_list: list, exponential: bool=False) -> list:
+    if exponential:
+        num_sample = len(str_list) - int(np.clip(
+            np.random.exponential(scale=0.3), 0, 1) * len(str_list))
+        return random.sample(str_list, num_sample)
+    return random.sample(str_list, random.randint(0, len(str_list)))
 
 def run_threaded_fn(func, args):
     t = Thread(target=func, args=args)

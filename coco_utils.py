@@ -1,6 +1,6 @@
 # from utils import load_coco_info
 from pycoco_custom import mask as maskUtils
-from utils import save_object, load_object, load_json, save_json, filter_dict_by
+from utils import save_object, load_object, load_json, save_json, filter_dict_by, check_if_file
 from config import DATASET_CONFIG, SUPERCATEGORIES
 from pycocotools.coco import COCO
 from PIL import Image, ImageOps
@@ -178,6 +178,17 @@ def check_missing_assets():
                 generate_assets()
                 break
 
+def get_vocab_info():
+    if not check_if_file(model_path("vocab_info")):
+        print(f"[!] Cannot find vocab info at {model_path('vocab_info')}, \
+            loading dataset and generating asset")
+        from dataset import Dataset
+        cocoDataset = Dataset("coco-safe-licenses")
+        vocab_info = cocoDataset.save_vocab_info()
+        return vocab_info
+    return load_object(model_path("vocab_info"))
+
+
 def generate_assets():
     coco_instances = COCO(asset_path("annotations", "instances"))
     coco_stuff = COCO(asset_path("annotations", "stuff"))
@@ -196,6 +207,9 @@ def generate_assets():
     if not os.path.isfile(DATASET_CONFIG["category_map"]):
         cat_map = category_map(coco_stuff, coco_instances) 
         save_object(cat_map, DATASET_CONFIG["category_map"])
+
+    get_vocab_info()
+
 
 # extension of coco mask
 def annToRLE(ann, img_dims):

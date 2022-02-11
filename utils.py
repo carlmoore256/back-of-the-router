@@ -7,7 +7,7 @@ from tqdm import tqdm
 import numpy as np
 import requests
 import shutil
-import pickle
+import pickle5 as pickle
 import json
 import glob
 import os
@@ -176,3 +176,6 @@ def check_if_local(path):
   if path.startswith("http"):
     return False
   return True
+
+def check_if_file(path):
+    return os.path.isfile(path)

@@ -1,7 +1,7 @@
 import random
 import numpy as np
-from utils import sort_dict, load_object
-from coco_utils import model_path
+from utils import sort_dict, load_object, check_if_file
+from coco_utils import model_path, get_vocab_info
 from nltk.tokenize import sent_tokenize, word_tokenize, sonority_sequencing
 from nltk.corpus import stopwords
 from nltk.stem import PorterStemmer
@@ -10,9 +10,20 @@ from nltk import pos_tag
 from config import DATASET_CONFIG
 import random
 
-VOCAB_INFO = load_object(model_path("vocab_info"))
+if check_if_file(model_path("vocab_info")):
+  VOCAB_INFO = load_object(model_path("vocab_info"))
+  TAGGED_VOCAB = pos_tag(VOCAB_INFO["vocabulary"])
+else:
+  VOCAB_INFO = None
+  TAGGED_VOCAB = None
 
-TAGGED_VOCAB = pos_tag(VOCAB_INFO["vocabulary"])
+# this is stupid, need to figure out this circular import issue...
+def check_get_vocab_info():
+    if VOCAB_INFO is None:
+      VOCAB_INFO = get_vocab_info()
+      TAGGED_VOCAB = pos_tag(VOCAB_INFO["vocabulary"])
+    return VOCAB_INFO
+    
 
 def generate_name(attributes: dict) -> str:
   word_len = random.randint(5, 20)
@@ -140,21 +151,21 @@ def sentence_to_grammar_ids(sentence):
 
 def words_to_grammar_ids(words):
   tagged = tag_words(words)
-  return [VOCAB_INFO["tag_to_id"][t[1]] for t in tagged]
+  return [check_get_vocab_info()["tag_to_id"][t[1]] for t in tagged]
 
 def sentence_to_ids(sentence):
   words = tokenize_sentence(sentence)
   return words_to_ids(words)
 
 def words_to_ids(words):
-  return [VOCAB_INFO["word_to_id"][w] for w in words]
+  return [check_get_vocab_info()["word_to_id"][w] for w in words]
 
 def ids_to_words(ids):
-  return [VOCAB_INFO["id_to_word"][id] for w in ids]
+  return [check_get_vocab_info()["id_to_word"][id] for w in ids]
 
 def get_all_words_for_grammar_id(grammar_id):
   matching = []
-  tag = VOCAB_INFO["id_to_tag"][grammar_id]
+  tag = check_get_vocab_info()["id_to_tag"][grammar_id]
   for t in TAGGED_VOCAB:
     if t[1] == tag:
       matching.append(t[0])

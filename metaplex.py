@@ -2,10 +2,27 @@ import json
 from collections import OrderedDict
 from lib2to3.pgen2.tokenize import generate_tokens
 import os
-from utils import load_json, save_json, get_all_files, get_asset_pair_path, save_object, check_make_dir
-from config import METAPLEX_CONFIG
+from utils import load_json, save_json, get_all_files, get_asset_pair_path, save_object, check_make_dir, abs_path
 from PIL import Image
 from nanoid import generate as generate_id
+from config import NFT_CONFIG_DEFAULT
+import subprocess
+import api
+# basis points / 100 = percentage
+
+METAPLEX_CONFIG = {
+    'symbol' : 'BOTR',
+    'description' : 'Algorithmically generated visual confusion',
+    'seller_fee_basis_points' : 700,
+    'external_url' : 'homunculi.org/art',
+    'collection_name' : 'Back-of-the-Router',
+    'collection_family' : 'Homunculi',
+    'category' : 'image',
+    'royalties' : NFT_CONFIG_DEFAULT["nft_creators"],
+    'candymachine_cli' : '~/metaplex/js/packages/cli/src/candy-machine-v2-cli.ts',
+    'candymachine_config' : 'config/candymachine_config.json'
+}
+
 
 # changes a dictionary with values into the metaplex format:
 # [ {"trait_type" : v, "value" : v} , {}, ... ]
@@ -42,8 +59,14 @@ FILE_TYPES = {
    "flac" : "audio/flac",
    "wav" : "audio/wav",
    "glb" : "vr/glb",
-   "gltf" : "vr/gltf"
+   "gltf" : "vr/gltf",
+   "unknown" : None
 }
+
+def load_file(file: str):
+    ext = list(FILE_TYPES.keys())[list(FILE_TYPES.values()).index(file['type'])]
+    file['type']
+
 
 def get_file_type(file: str) -> str:
     ext = os.path.splitext(os.path.split(file)[-1])[-1]
@@ -119,14 +142,12 @@ def sort_order_attributes(metaplex_attrs) -> OrderedDict:
     return OrderedDict(sorted(attrs.items()))
 
 def save_metaplex_assets(base_path: str, image: Image, 
-                        metadata: dict, obj: dict=None) -> list:
+                        metadata: dict, product_info: dict=None) -> list:
     idx, [img_path, json_path] = get_asset_pair_path(base_path)
     files = [img_path]
 
-    identifier = generate_id(size=10)
-
     # contains some data that all homunculi nfts will have
-    other_properties = [["homunculi",  {"identifier" : identifier }],]
+    other_properties = [["homunculi",  {"product-info" : product_info }],]
 
     metadata = generate_metadata(
         name = f"{METAPLEX_CONFIG['symbol']} #{idx+1:03d}",
@@ -145,7 +166,11 @@ def save_metaplex_assets(base_path: str, image: Image,
         other_properties=other_properties)
     image.save(img_path)
     save_json(json_path, metadata)
-    print(f"saved image and metadata pair: {img_path} {json_path}")
+    
+    api.new_asset(product_info['id'], "png", abs_path(img_path), "image")
+    api.new_asset(product_info['id'], "json", abs_path(json_path), "metadata")
+
+    print(f"=> Saved image and metadata pair: {img_path} {json_path}")
     return idx, [img_path, json_path], metadata
 
 # deprecated, use save_asset_pair
@@ -187,3 +212,34 @@ def change_royalties_existing_meta(asset_path="assets/",
         meta = load_json(f)
         meta['properties']['creators'] = royalties
         save_json(f, meta)
+
+def candymachine_upload(asset_path: str="assets/",
+    network: str="devnet",
+    keypair: str="~/.config/solana/devnet.json",
+    config: str=METAPLEX_CONFIG['candymachine_config'],
+    cache_id: str="example"):
+
+    command = ['ts-node', 
+                METAPLEX_CONFIG['candymachine_cli'],
+                'upload',
+                '-e', network,
+                '-k', keypair,
+                '-cp', config,
+                '-c', cache_id,
+                asset_path]
+
+    proc = subprocess.Popen(command, 
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE)
+    stdout, stderr = proc.communicate()
+
+    if stderr:
+        return None
+
+
+
+    # verify_token_metadata
+
+    # show - shows info on existing metadata, useful for retriving data on other products
+
+    # update_candy_machine

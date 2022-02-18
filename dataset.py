@@ -8,7 +8,6 @@ from coco_example import COCO_Example
 from config import DATASET_CONFIG
 
 import numpy as np
-import argparse
 import random
 import os
 

@@ -5,6 +5,7 @@
     "nft_creators" : 
     [
         {"address" : "6TNtaPn8MEaBvekb7PzFnPTm6aTHdvFmSBoRznjETjXK", "share" : 50},
-        {"address" : "CAR71eJdkS31QTRBauqmYe5ERScodoZLJ6DiauBhuRZx", "share" : 30}
+        {"address" : "CAR71eJdkS31QTRBauqmYe5ERScodoZLJ6DiauBhuRZx", "share" : 30},
+        {"address" : "3vATRqCvMMDj2suCJpYVYg9ngE5kErG5jzcCtggQLQC8", "share" : 20}
     ]
 }

@@ -163,3 +163,5 @@ nft.ipynb
 deployment.ipynb
 
 stats.ipynb
+*.ipynb
+assets-0.1.0/

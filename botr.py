@@ -7,7 +7,7 @@ from skimage.exposure import histogram, match_histograms
 from cv2 import dilate, GaussianBlur
 from PIL import Image
 
-from utils import save_object, load_object, image_nonzero_px, arr2d_to_img, check_make_dir
+from utils import save_object, load_object, image_nonzero_px, arr2d_to_img, check_make_dir, get_filename, abs_path
 from coco_utils import model_path, get_annotation_center, annToMask
 from dataset import composition_attributes, get_annotation_supercategory
 from metaplex import save_metaplex_assets
@@ -18,8 +18,10 @@ from pyramids import blend_masked_rgb
 from masking import resize_fit, create_exclusion_mask, mask_add_composite
 from postprocessing import sharpen_image, jpeg_decimation, adaptive_hist, image_histogram
 from visualization import attribute_breakdown, imshow
-
-from config import LSTM_CONFIG
+from product import new_product
+# from nft import NFT
+import api
+from config import LSTM_CONFIG, PROJECT_VERSION, PROJECT_ID
 
 VOCAB_INFO = load_object(model_path("vocab_info"))
 
@@ -79,9 +81,15 @@ class BOTR_Layer():
     def dominant_color(self, fit=[256,256]):
         img = self.mask_image(fit)
         hist = histogram(img, channel_axis=-1, normalize=True)[0]
-        avg = np.mean(hist, axis=0)
-        print(np.argmax(avg))
-        return hist, img
+
+        hist = hist[:, 1:]
+        r_sum = np.mean(np.power(hist[0], 2))
+        g_sum = np.mean(np.power(hist[1], 2))
+        b_sum = np.mean(np.power(hist[2], 2))
+
+        sums = [r_sum, g_sum, b_sum]
+        sums /= sum(sums)
+        return hist, sums, img
 
     # ======== masking =================================
 
@@ -249,10 +257,16 @@ class BOTR():
             self.metadata = self.generate_metadata(config)
             self.history: GeneratedItem = [] # contains a generated botr and description
             self.generatedItem: GeneratedItem = None
+
+            # assigned once and should never change
+            # eventually make this assigned only by the API, which will be in API functionality
+            print(f'CALLING NEW PROD')
+            self.product_info = new_product()
         
         self.title_model = Markov()
         self.set_description_model(self.config['descriptionModel'])
         self.Dataset = dataset # eventually remove this
+
 
     def display(self):
         self.generatedItem.display()
@@ -513,23 +527,24 @@ class BOTR():
             self.metadata)
 
     # saves the image and metadata assets
-    def save_assets(self, base_path: str, 
-           genItem: GeneratedItem=None, save_obj: bool=True, 
-           verbose: bool=True) -> None:
-
-        if genItem is None:
-            genItem = self.generatedItem
+    def save_assets(self, base_path: str, genItem: GeneratedItem=None,
+            save_obj: bool=True, verbose: bool=True) -> None:
+        
+        if self.product_info is None : self.product_info = new_product()            
+        if genItem is None : genItem = self.generatedItem
         self.save_state(genItem)
-
         check_make_dir(base_path)
         idx, paths, metadata = save_metaplex_assets(base_path, 
-                                        genItem.image, genItem.metadata)
+                                genItem.image, genItem.metadata,
+                                self.product_info)
         if save_obj:
-            ident = metadata["properties"]["homunculi"]["identifier"]
-            filename = f"{base_path}objects/{ident}.pkl"
-            save_object(self.get_save_state(), filename)
+            filename = f"{base_path}objects/{self.product_info['id']}.pkl"
+            save_object(self.get_save_state(), abs_path(filename))
+            res = api.new_asset(self.product_info['id'],
+                            "pkl", abs_path(filename), "botr_binary")
             if verbose:
-                print(f'=> saved BOTR object to {filename}')
+                print(f'=> Saved BOTR object to {filename}\n\
+                    => Saved asset to database {res}')
         return idx, paths
 
     # returns an object containing necessary properties to operate
@@ -537,14 +552,15 @@ class BOTR():
         state = {
             "layers" : self.layers.get_save_data(),
             "config" : self.config,
-            "generated_item" : self.generatedItem }
+            "generatedItem" : self.generatedItem,
+            "productInfo" : self.product_info }
         if history:
-            state["save_history"] = self.history
+            state["saveHistory"] = self.history
         return state
 
     # saves the object for future use, choose to save history
-    def save_botr(self, path: str, history: bool=False):
-        save_object(self.get_save_state(history), f"{path}/{self.generatedItem.metadata['text']['name']}")
+    # def save_botr(self, path: str, history: bool=False):
+    #     save_object(self.get_save_state(history), f"{path}/{self.generatedItem.metadata['text']['name']}")
 
     # loads a botr from a pickled save file
     def load_botr(self, path: str):
@@ -552,11 +568,48 @@ class BOTR():
         self.layers = Layers()
         self.layers.load_save_data(data['layers'])
         self.config = data['config']
-        self.generatedItem = data['generated_item']
-        if "save_history" in data.keys():
-            self.history = data["save_history"]
+
+        # ugh
+        if "generated_item" in data.keys():
+            self.generatedItem = data['generated_item']
+        else:
+            self.generatedItem = data['generatedItem']
+
+
+        if "saveHistory" in data.keys():
+            self.history = data["saveHistory"]
         else:
             self.history: GeneratedItem = []
+
+        if "productInfo" in data.keys():
+            self.product_info = data['productInfo']
+            if self.product_info["projectId"] != PROJECT_ID:
+                # create a new product under the current project
+                self.product_info = new_product()
+                print(f'[!] Project version did not match, creating new product \
+                    {self.product_info}')
+        else:
+            # create new product_info with the productId being the filename
+            self.product_info = new_product(productId=get_filename(path))
+            print(f"product created pre-versioning or is missing 'product-info'\
+                created a new product info with id {self.product_info['id']}")
+
+        ''' This product waits for the user to specify that it's a legitimate product
+          worth saving, which will send a POST request and update the database.
+          There will always be a persistent 'product-id' associated with any new creation,
+          that will be internal but not exposed to the api unless saved.
+        '''
+         
+    # new features added on top of ones that should always be supported
+    # def load_properties_extended(self, data):
+    #     # v0.1.0, integrating thurs, feb. 10
+    #     self.product_info = {
+    #         "product-id" : data['product-id'],
+    #         "project-version" : data['project-version'],
+    #         # "published" : data['published'],
+    #         "api-version" : data['api-version'],
+    #         "homunculi-id" : data['homunculi-id']
+    #     }
 
     # ======== iterator functions ============================
 

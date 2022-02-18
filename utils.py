@@ -13,6 +13,9 @@ import json
 import glob
 import os
 
+def abs_path(relative_path):
+    return os.path.abspath(relative_path)
+
 # sample randomly from a set of strings, exponential adds a bias
 def random_subset(str_list: list, exponential: bool=False) -> list:
     if exponential:
@@ -26,9 +29,13 @@ def run_threaded_fn(func, args):
     t.start()
     return t
 
+# gets only the filename without the extension or path
+def get_filename(filepath) -> str:
+    return os.path.splitext(os.path.split(filepath)[-1])[0]
+
 # converts filename to an int index, filename must be formatteds "0.ext", "1.ext"...
-def filenum_idx(filename) -> int:
-    return int(os.path.splitext(os.path.split(filename)[-1])[0])
+def filenum_idx(filepath) -> int:
+    return int(get_filename(filepath))
 
 def map_assets(base_path: str="assets/"):
     meta = get_all_files(base_path, "json")

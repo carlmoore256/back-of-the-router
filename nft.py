@@ -4,13 +4,14 @@ import collections
 import random
 
 from metaplex import reverse_metaplex_attributes, remaining_royalty_share, avg_attributes, \
-    attrs_difference, sort_order_attributes
+    attrs_difference, sort_order_attributes, FILE_TYPES
+# import metaplex
 from utils import load_json, save_json, open_image, sort_dict, map_assets
 from visualization import attribute_breakdown, graph_attributes, display_image_meta
 from rendering import render_matching_botr
 from api import metaplex_nft_metadata
 from dataset import Dataset
-from botr import BOTR
+# from botr import BOTR
 
 from config import RENDER_CONFIG_DEFAULT, NFT_CONFIG_DEFAULT
 
@@ -20,7 +21,45 @@ IMG_META_URI = {
     "metadata" : "out/0.json"
 }
 
-class BOTR_NFT():
+class NFT():
+
+    def __init__(self):
+        pass
+
+    def from_solana_address(self, address):
+        self.metadata = metaplex_nft_metadata(address)
+        self.assets = {}
+        if 'image' in self.metadata.keys():
+            self.assets['image'] = open_image(self.metadata['image'])
+        # add functions for loading video, audio, etc
+
+
+    # def from_metadata_file(self, file):
+    #     self.metadata = load_json(file)
+
+    # def load_assets(self, metadata):
+    #     assets = {}
+
+    #     if 'image' in self.metadata.keys():
+    #         assets['image'] = open_image(metadata['image'])
+
+    #     for f in metadata['properties']['files']:
+    #         metaplex.load_file(f)
+
+    #     # for f in metadata['properties']['files']:
+
+
+    #     for ft in FILE_TYPES:
+            
+    #         if ft in metadata.keys():
+                
+
+    #     if 'image' in metadata.keys():
+    #         assets['image'] = open_image(metadata['image'])
+            
+
+
+class Breedable_NFT():
 
     def __init__(self, uri_pair: dict=None, address: str=None,
                     parents: list=None):
@@ -43,7 +82,7 @@ class BOTR_NFT():
                             self.metadata['name'])
 
     def breed(self, otherNft,
-                botrGen: BOTR, nftConfig: dict,
+                botrGen, nftConfig: dict,
                 render_config: dict=RENDER_CONFIG_DEFAULT):
         return generate_child_nft(self, otherNft, botrGen,
                     inheritence_fill=nftConfig['inheritence_fill'],
@@ -74,6 +113,7 @@ class BOTR_NFT():
         return self.address
 
     def get_identifier(self):
+        return self.metadata['product_info']
         return self.metadata['properties']['homunculi']['identifier']
 
     def get_generator(self, base_path="assets/objects/"):
@@ -81,7 +121,8 @@ class BOTR_NFT():
         
     # add a function to upload to metapex candymachine address
 
-def get_botr_generator(identifier: str, base_path: str="assets/objects/") -> BOTR:
+def get_botr_generator(identifier: str, base_path: str="assets/objects/"):
+    from botr import BOTR
     return BOTR(load_data=f"{base_path}{identifier}.pkl")
 
 # return a similarity score based on the distance, the lower the more similar
@@ -103,7 +144,7 @@ def make_child_attrs(attrs_1: dict, attrs_2: dict, noise_scalar: float=0.01):
     return child_genes
 
 # cross two nft traits to obtain child attributes of a new one
-def generate_child_attrs(nft_1: BOTR_NFT, nft_2: BOTR_NFT):
+def generate_child_attrs(nft_1: Breedable_NFT, nft_2: Breedable_NFT):
     attrs_1 = reverse_metaplex_attributes(nft_1.metadata['attributes'])
     attrs_2 = reverse_metaplex_attributes(nft_2.metadata['attributes'])
     child_attrs = make_child_attrs(attrs_1, attrs_2)
@@ -112,7 +153,7 @@ def generate_child_attrs(nft_1: BOTR_NFT, nft_2: BOTR_NFT):
     return child_attrs, attrs_1, attrs_2
 
 
-def add_parents_to_creators(path: str, parent_1: BOTR_NFT, parent_2: BOTR_NFT,
+def add_parents_to_creators(path: str, parent_1: Breedable_NFT, parent_2: Breedable_NFT,
                                 child_attrs: dict = None) -> None:
     metadata = load_json(path)
     creators = NFT_CONFIG_DEFAULT['nft_creators']
@@ -148,12 +189,12 @@ def add_parents_to_creators(path: str, parent_1: BOTR_NFT, parent_2: BOTR_NFT,
     save_json(path, metadata)
 
 # combine two existing BOTR nfts to generate a new one
-def generate_child_nft(nft_1: BOTR_NFT, nft_2: BOTR_NFT,
-                            botrGen: BOTR, dataset: Dataset, 
+def generate_child_nft(nft_1: Breedable_NFT, nft_2: Breedable_NFT,
+                            botrGen, dataset: Dataset, 
                             inheritence_fill: float=0.75,
                             target_fill: float=0.95, overstep_lim: float=1.25,
                             render_config: dict=RENDER_CONFIG_DEFAULT,
-                            out_path: str="out/", verbose: bool=False) -> BOTR_NFT:
+                            out_path: str="out/", verbose: bool=False) -> Breedable_NFT:
     child_attrs, attrs_1, attrs_2 = generate_child_attrs(nft_1, nft_2)
     render_matching_botr(botrGen, dataset, child_attrs, inheritence_fill, 
                         target_fill, overstep_lim, verbose)
@@ -161,30 +202,30 @@ def generate_child_nft(nft_1: BOTR_NFT, nft_2: BOTR_NFT,
     botrGen.generate(render_config)
     idx, [png_path, json_path] = botrGen.save_assets(out_path, verbose=verbose)
     add_parents_to_creators(json_path, nft_1, nft_2, child_attrs)
-    return BOTR_NFT(
+    return Breedable_NFT(
         uri_pair={"image":png_path, "metadata":json_path},
         parents=[nft_1, nft_2])
 
 def random_botr_nft(base_path="assets/"):
     assets = map_assets(base_path)
     pair = random.choice(list(assets.values()))
-    return BOTR_NFT(uri_pair=pair)
+    return Breedable_NFT(uri_pair=pair)
 
 
-if __name__ == "__main__":
+# if __name__ == "__main__":
 
-    botrNft1 = BOTR_NFT({
-        "image" : "out/0.png",
-        "metadata" : "out/0.json"
-    })
-    botrNft2 = BOTR_NFT({
-        "image" : "out/1.png",
-        "metadata" : "out/1.json"
-    })
+#     botrNft1 = BOTR_NFT({
+#         "image" : "out/0.png",
+#         "metadata" : "out/0.json"
+#     })
+#     botrNft2 = BOTR_NFT({
+#         "image" : "out/1.png",
+#         "metadata" : "out/1.json"
+#     })
 
-    cocoDataset = Dataset()
-    botrGen = BOTR(RENDER_CONFIG_DEFAULT, cocoDataset)
-    newNft = generate_child_nft(
-        botrNft1, botrNft2, botrGen, 
-        inheritance_target_fill = 0.75,
-        target_fill=0.95, overstep_lim=1.25)
+#     cocoDataset = Dataset()
+#     botrGen = BOTR(RENDER_CONFIG_DEFAULT, cocoDataset)
+#     newNft = generate_child_nft(
+#         botrNft1, botrNft2, botrGen, 
+#         inheritance_target_fill = 0.75,
+#         target_fill=0.95, overstep_lim=1.25)

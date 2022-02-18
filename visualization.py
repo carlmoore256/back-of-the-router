@@ -11,6 +11,15 @@ def imshow(img, title='', size=(10,10)):
     plt.yticks([])
     plt.show()
 
+def plot_histogram(hist):
+    plt.plot(hist[0, 1:], color='red')
+    plt.plot(hist[1, 1:], color='green')
+    plt.plot(hist[2, 1:], color='blue')
+    plt.show()
+
+def plot_bar(keys, values):
+    plt.bar(keys, values)
+    plt.show()
 
 def display_multiple_images(images=[], titles=[], size=(20,10)):
     plt.figure(figsize=size)

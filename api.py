@@ -3,6 +3,7 @@ from numpy import product
 import requests
 from nanoid import generate as generate_id
 import json
+from utils import local_uri_to_web, abs_path
 
 HOMUNCULI_API = {
   "base_url" : "https://homunculi.org",
@@ -11,14 +12,19 @@ HOMUNCULI_API = {
   "routes" : {
     "metadata" : "api/metaplex/",
     "metadata-off-chain" : ["api/metaplex/", "off-chain"],
-    "new-project" : "api/nft/newProject",
-    "new-product" : "api/nft/newProduct",
-    "new-asset" : "api/nft/newAsset",
+    "new-project" : "api/nft/new-project",
+    "new-product" : "api/nft/new-product",
+    "new-asset" : "api/nft/new-asset",
     "project" : "api/nft/project",
     "product" : "api/nft/product",
     "asset" : "api/nft/asset",
-    "remove-product" : "api/nft/removeProduct",
-    "remove-asset" : "api/nft/removeAsset"
+    "remove-product" : "api/nft/remove-product",
+    "remove-asset" : "api/nft/remove-asset",
+    "product-assets" : ["api/nft/product/", "/assets"],
+    "asset-data" : "api/nft/asset/",
+    "update-breed-request" : "api/botr/update-breed-request",
+    "breed-requests" : "api/botr/breed-requests",
+    "collection-size" : ["api/nft/project/", "/largest-sequence-number"]
   }
 }
 
@@ -35,9 +41,17 @@ def handle_post_result(res):
     return res
 
 def api_base():
-    return f"{HOMUNCULI_API['base_url']}:{HOMUNCULI_API['port']}"
+    return f"{HOMUNCULI_API['base_url']}:{HOMUNCULI_API['port']}/"
 
-def get(request):
+# def get(request):
+#     print(f'REQUEST {request}')
+#     try:
+#         return requests.get(request).json()
+#     except Exception as e:
+#         print(f'[!] request {request} failed!\n{e}')
+#         return None
+def get(route):
+    request = f"{api_base()}{route}"
     print(f'REQUEST {request}')
     try:
         return requests.get(request).json()
@@ -46,7 +60,7 @@ def get(request):
         return None
 
 def post(route, data):
-    request = f"{api_base()}/{route}"
+    request = f"{api_base()}{route}"
     try:
         return handle_post_result(
             requests.post(request, json=data).json())
@@ -56,7 +70,7 @@ def post(route, data):
 
 def metaplex_nft_metadata(address):
     route = HOMUNCULI_API['routes']['metadata-off-chain']
-    return get(f"{api_base()}/{route[0]}{address}/{route[1]}")
+    return get(f"{route[0]}{address}/{route[1]}")
 
 # ======================================
 # ************** DATABASE **************
@@ -81,6 +95,9 @@ def new_product(projectId: str, productId: str=None) -> dict:
 
 def new_asset(productId: str, assetType: str, uri: str, tag: str=None) -> dict:
     route = HOMUNCULI_API['routes']['new-asset']
+    # checks if uri is in the web directory
+    # converts path to the full absolute path
+    uri = local_uri_to_web(uri)
     post_data = {
         "productId": productId,
         "type": assetType,
@@ -145,12 +162,21 @@ def remove_product_and_assets(productId: str):
 # remove all assets for project cleanly
 def remove_project_products_and_assets(projectId: str):
     # get all project asset
-    products = query_products(projectId=projectId)
-    for p in products:
-        remove_product_and_assets(productId=p["id"])
+    remove_product(projectId=projectId)
+    # products = query_products(projectId=projectId)
+    # for p in products:
+    #     remove_product(productId=p["id"])
 
 def remove_product_asset_by_tag(productId: str, tag: str):
     remove_asset(productId=productId, tag=tag)
+
+def get_product_assets(productId: str):
+    route = HOMUNCULI_API['routes']['product-assets']
+    return get(f"{route[0]}{productId}{route[1]}")
+
+def get_asset_data(assetId: str):
+    route = HOMUNCULI_API['routes']['asset-data']
+    return get(f"{route}{assetId}")
     
 # == Query Helpers ==
 
@@ -163,17 +189,18 @@ def format_query(args: list, names: list):
             query[name] = arg
     return query
 
+# =============================================
 
+def request_breed_status(status: str):
+    route = HOMUNCULI_API['routes']['breed-requests']
+    # gonna return an array of requests
+    #  return status, id, data
+    return get(f"{route}/{status}")
 
-    
+def complete_breed_request(data):
+    route = HOMUNCULI_API['routes']['update-breed-request']
+    return post(route, data)
 
-# if assetId is not None:
-#     post_data['id'] = assetId
-# if productId is not None:
-#     post_data['productId'] = productId
-# if assetType is not None:
-#     post_data['type'] = assetType
-# if uri is not None:
-#     post_data['uri'] = uri
-# if tag is not None:
-#     post_data['tag'] = tag
+def get_collection_size(projectId: str):
+    route = HOMUNCULI_API['routes']['collection-size']
+    return get(f"{route[0]}{projectId}{route[1]}")["sequenceNumber"]

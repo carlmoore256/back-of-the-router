@@ -1,7 +1,7 @@
 # botr image statistics
 
 from random import shuffle
-from nft import BOTR_NFT, generate_child_nft, random_botr_nft
+from nft import Breedable_NFT, generate_child_nft, random_botr_nft
 # random_botr_nft
 from dataset import Dataset
 from botr import BOTR
@@ -24,9 +24,9 @@ STATS_RENDER = QUICK_RENDER.copy()
 STATS_RENDER['outputSize'] = [128,128]
 
 
-def breed_child(parent_1: BOTR_NFT, parent_2: BOTR_NFT, 
+def breed_child(parent_1: Breedable_NFT, parent_2: Breedable_NFT, 
                     dataset: Dataset, rend_config: dict, 
-                    history: list, childNum: int) -> BOTR_NFT:
+                    history: list, childNum: int) -> Breedable_NFT:
     gen = BOTR(RENDER_CONFIG_DEFAULT)
     child = generate_child_nft(parent_1, parent_2, 
                         gen, dataset, inheritence_fill=0.75,

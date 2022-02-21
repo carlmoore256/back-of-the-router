@@ -13,6 +13,17 @@ import json
 import glob
 import os
 
+# accepts a list of subpaths (because os path join doesn't)
+def join_paths(dir_list: list) -> str:
+    return os.path.join(*dir_list)
+
+def local_uri_to_web(uri: str, web_base: str="https://homunculi.org") -> str:
+    uri = abs_path(uri)
+    if uri.startswith("/var/www/html"):
+        idx = uri.find("html")
+        return os.path.join(web_base, uri[idx+5:])
+    return uri
+    
 def abs_path(relative_path):
     return os.path.abspath(relative_path)
 

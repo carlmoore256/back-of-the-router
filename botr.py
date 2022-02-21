@@ -1,4 +1,5 @@
 from copy import copy
+from construct import obj_
 import numpy as np
 import random
 from tqdm import tqdm
@@ -7,7 +8,7 @@ from skimage.exposure import histogram, match_histograms
 from cv2 import dilate, GaussianBlur
 from PIL import Image
 
-from utils import save_object, load_object, image_nonzero_px, arr2d_to_img, check_make_dir, get_filename, abs_path
+from utils import save_object, load_object, image_nonzero_px, arr2d_to_img, check_make_dir, get_filename, abs_path, join_paths
 from coco_utils import model_path, get_annotation_center, annToMask
 from dataset import composition_attributes, get_annotation_supercategory
 from metaplex import save_metaplex_assets
@@ -39,6 +40,7 @@ class BOTR_Layer():
             self.center = get_annotation_center(annotation)
             self.px_filled = 0
             self.raster = None
+            self.raster_full = None
         else:
             print(f'Failed to create layer, provide an example')
 
@@ -68,6 +70,9 @@ class BOTR_Layer():
     def update_raster(self, raster):
         self.raster = arr2d_to_img(raster)
         self.px_filled = image_nonzero_px(self.raster) / (raster.shape[0] * raster.shape[1])
+
+    def update_raster_full(self, raster):
+        self.raster_full = arr2d_to_img(raster)
 
     def update_mask(self, compositeMask=None):
         if compositeMask is not None:
@@ -116,6 +121,14 @@ class BOTR_Layer():
 
     def get_image(self, fit=None):
         return self.coco_example.load_image(fit)
+
+    def get_raster(self, full=False):
+        if full:
+            return np.asarray(self.raster_full)
+        return self.raster
+
+    def apply_mask(self, image):
+        return self.get_mask(image.shape) * image
 
     def percentage_fill(self):
         return self.px_filled
@@ -247,7 +260,8 @@ class GeneratedItem():
 # ************************************************************
 class BOTR():
   
-    def __init__(self, config=None, dataset=None, load_data=None):
+    def __init__(self, config=None, dataset=None, load_data=None, 
+                registerProductInfo=True):
         if load_data is not None:
             self.load_botr(load_data)
         else:
@@ -260,11 +274,11 @@ class BOTR():
 
             # assigned once and should never change
             # eventually make this assigned only by the API, which will be in API functionality
-            print(f'CALLING NEW PROD')
-            self.product_info = new_product()
-        
+            if registerProductInfo:
+                self.product_info = new_product()
         self.title_model = Markov()
-        self.set_description_model(self.config['descriptionModel'])
+        # self.set_description_model(self.config['descriptionModel'])
+        self.set_description_model("markov")
         self.Dataset = dataset # eventually remove this
 
 
@@ -421,6 +435,8 @@ class BOTR():
                 layer.update_raster(excluded)
             
             compositeMask = np.logical_or(exclusionMask, compositeMask).astype(np.uint8)
+            layer.update_raster_full(image)
+
             if config["showProgress"]:
                 pbar.update(1)
 
@@ -530,7 +546,10 @@ class BOTR():
     def save_assets(self, base_path: str, genItem: GeneratedItem=None,
             save_obj: bool=True, verbose: bool=True) -> None:
         
-        if self.product_info is None : self.product_info = new_product()            
+        if self.product_info is None:
+            self.product_info = new_product()
+        # else:
+        #     api.remove_product_and_assets(self.product_info['id'])          
         if genItem is None : genItem = self.generatedItem
         self.save_state(genItem)
         check_make_dir(base_path)
@@ -538,13 +557,14 @@ class BOTR():
                                 genItem.image, genItem.metadata,
                                 self.product_info)
         if save_obj:
-            filename = f"{base_path}objects/{self.product_info['id']}.pkl"
+            productId = self.product_info['id']
+            obj_path = join_paths([base_path, "objects"])
+            check_make_dir(obj_path)
+            filename = join_paths([obj_path, f"{productId}.pkl"])
             save_object(self.get_save_state(), abs_path(filename))
-            res = api.new_asset(self.product_info['id'],
-                            "pkl", abs_path(filename), "botr_binary")
+            api.new_asset(productId, "pkl", abs_path(filename), "botr_binary")
             if verbose:
-                print(f'=> Saved BOTR object to {filename}\n\
-                    => Saved asset to database {res}')
+                print(f'=> Saved BOTR object to {filename}')
         return idx, paths
 
     # returns an object containing necessary properties to operate

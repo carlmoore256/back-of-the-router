@@ -5,7 +5,7 @@ import os
 from utils import load_json, save_json, get_all_files, get_asset_pair_path, save_object, check_make_dir, abs_path
 from PIL import Image
 from nanoid import generate as generate_id
-from config import NFT_CONFIG_DEFAULT
+from config import NFT_CONFIG_DEFAULT, PROJECT_ID
 import subprocess
 import api
 # basis points / 100 = percentage
@@ -141,13 +141,35 @@ def sort_order_attributes(metaplex_attrs) -> OrderedDict:
     attrs = reverse_metaplex_attributes(metaplex_attrs)
     return OrderedDict(sorted(attrs.items()))
 
+# formats the metadata to metaplex but does not save
+def format_asset_metaplex(img_path: str, metadata: dict, product_info: dict=None):
+    collection_size = api.get_collection_size(PROJECT_ID)
+    metadata = generate_metadata(
+        name = f"{METAPLEX_CONFIG['symbol']} #{collection_size+1:03d}",
+        symbol = METAPLEX_CONFIG['symbol'],
+        description = f"{metadata['text']['name']}: {metadata['text']['description']}",
+        seller_fee_basis_points = METAPLEX_CONFIG['seller_fee_basis_points'],
+        image_file = img_path,
+        animation_path = '',
+        external_url = METAPLEX_CONFIG['external_url'],
+        attributes = metaplex_attributes(metadata['composition']),
+        collection_name = METAPLEX_CONFIG['collection_name'],
+        collection_family = METAPLEX_CONFIG['collection_family'],
+        files = [img_path],
+        category = METAPLEX_CONFIG['category'],
+        royalties = METAPLEX_CONFIG['royalties'] )
+
+    if product_info is not None:
+        metadata["properties"]["homunculi"] = {"product-info" : product_info }  
+    else:
+        metadata["properties"]["homunculi"] = {}
+
 def save_metaplex_assets(base_path: str, image: Image, 
                         metadata: dict, product_info: dict=None) -> list:
     idx, [img_path, json_path] = get_asset_pair_path(base_path)
-    files = [img_path]
 
     # contains some data that all homunculi nfts will have
-    other_properties = [["homunculi",  {"product-info" : product_info }],]
+    # other_properties = [["homunculi",  {"product-info" : product_info }],]
 
     metadata = generate_metadata(
         name = f"{METAPLEX_CONFIG['symbol']} #{idx+1:03d}",
@@ -162,13 +184,19 @@ def save_metaplex_assets(base_path: str, image: Image,
         collection_family = METAPLEX_CONFIG['collection_family'],
         files = [img_path],
         category = METAPLEX_CONFIG['category'],
-        royalties = METAPLEX_CONFIG['royalties'],
-        other_properties=other_properties)
+        royalties = METAPLEX_CONFIG['royalties']
+        # other_properties=other_properties)
+    )
+
+    if product_info is not None:
+        metadata["properties"]["homunculi"] = {"product-info" : product_info }
+
     image.save(img_path)
     save_json(json_path, metadata)
     
-    api.new_asset(product_info['id'], "png", abs_path(img_path), "image")
-    api.new_asset(product_info['id'], "json", abs_path(json_path), "metadata")
+    if product_info is not None:
+        api.new_asset(product_info['id'], "png", abs_path(img_path), "image")
+        api.new_asset(product_info['id'], "json", abs_path(json_path), "metadata")
 
     print(f"=> Saved image and metadata pair: {img_path} {json_path}")
     return idx, [img_path, json_path], metadata

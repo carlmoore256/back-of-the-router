@@ -12,10 +12,19 @@ import random
 
 if check_if_file(model_path("vocab_info")):
   VOCAB_INFO = load_object(model_path("vocab_info"))
-  TAGGED_VOCAB = pos_tag(VOCAB_INFO["vocabulary"])
+  try:
+    TAGGED_VOCAB = pos_tag(VOCAB_INFO["vocabulary"])
+  except Exception as e:
+    print(e)
+    pass
 else:
   VOCAB_INFO = None
   TAGGED_VOCAB = None
+
+SSP = SyllableTokenizer()
+
+def syllable_tokenize(corpus):
+  return SSP.tokenize(corpus)
 
 # this is stupid, need to figure out this circular import issue...
 def check_get_vocab_info():
@@ -195,7 +204,6 @@ def words_to_sentence(words):
     else:
       sentence += w + " "
   return sentence
-
 
 def letters_to_ids(letters):
   return [ord(letter) - 96 + 31 for letter in letters]

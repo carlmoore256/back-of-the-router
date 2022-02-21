@@ -1,17 +1,15 @@
 import random
 from nltk.corpus import stopwords
 from coco_utils import generate_assets
-from language_processing import word_tokenize, end_sentence
-from nltk.tokenize.sonority_sequencing import SyllableTokenizer
+from language_processing import word_tokenize, syllable_tokenize, end_sentence
 
 # https://www.agiliq.com/blog/2009/06/generating-pseudo-random-text-with-markov-chains-u/
 
 class Markov(object):
 	
 	def __init__(self):
-		self.stop_words = set(stopwords.words("english"))
-		self.SSP = SyllableTokenizer()
-		
+		pass
+
 	def set_corpus(self, corpus):
 		self.cache = {}
 		corpus = [word.lower() for word in corpus if word.isalpha()]
@@ -80,7 +78,7 @@ class Markov(object):
 	# input syllables and use markov chain to generate a word
 	def generate_word(self, params: dict, corpus: list) -> str:
 		corpus = " ".join(corpus)
-		syl_tokens = self.SSP.tokenize(corpus)
+		syl_tokens = syllable_tokenize(corpus)
 		self.set_corpus(syl_tokens)
 		size = min(params['length'], self.word_size-3)
 		seed = random.randint(0, self.word_size-3)

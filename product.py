@@ -11,28 +11,27 @@ import api
 def generate_identifier():
     return generate_id(size=10)
 
-def api_publish(product_info: dict) -> None:
-    # request api to publish info into database here
-    return None
+# def api_publish(product_info: dict) -> None:
+#     # request api to publish info into database here
+#     return None
 
-def publish_product(productId: str, projectId: str=PROJECT_ID, 
-                        projectVersion: str=PROJECT_VERSION):
-    product_info = {
-        "product-id" : productId,
-        "project-id" : projectId,
-        "project-version" : projectVersion,
-        "api-version" : API_VERSION,
-        "homunculi-id" : productId }
-    api_publish(product_info)
-    return product_info
+# def publish_product(productId: str, projectId: str=PROJECT_ID, 
+#                         projectVersion: str=PROJECT_VERSION):
+#     product_info = {
+#         "product-id" : productId,
+#         "project-id" : projectId,
+#         "project-version" : projectVersion,
+#         "api-version" : API_VERSION,
+#         "homunculi-id" : productId }
+#     api_publish(product_info)
+#     return product_info
 
 
 def new_product(productId: str=None, projectId: str=PROJECT_ID, 
                         projectVersion: str=PROJECT_VERSION) -> dict:
-    print(f'PRODUCT IID {productId}')
+    print(f'PRODUCT ID {productId}')
     if productId is None:
         # default to having the api request new info
-        print(f'PROJECT ID {projectId}')
         info = api.new_product(projectId=projectId)
         if info is not None:
             return api.get_product_info(info["id"])
@@ -55,5 +54,3 @@ def new_product(productId: str=None, projectId: str=PROJECT_ID,
     # get the product from the database
     print(f'=> Created new product {info}')
     return api.get_product_info(info["id"])
-
-    print(f'[!] Something went wrong trying to create a new product')

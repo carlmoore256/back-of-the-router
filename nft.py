@@ -6,10 +6,10 @@ import random
 from metaplex import reverse_metaplex_attributes, remaining_royalty_share, avg_attributes, \
     attrs_difference, sort_order_attributes, FILE_TYPES
 # import metaplex
-from utils import load_json, save_json, open_image, sort_dict, map_assets
+from utils import load_json, save_json, open_image, sort_dict, map_assets, print_pretty
 from visualization import attribute_breakdown, graph_attributes, display_image_meta
 from rendering import render_matching_botr
-from api import metaplex_nft_metadata
+from api import metaplex_nft_metadata, get_product_assets, get_asset_data
 from dataset import Dataset
 # from botr import BOTR
 
@@ -61,16 +61,19 @@ class NFT():
 
 class Breedable_NFT():
 
-    def __init__(self, uri_pair: dict=None, address: str=None,
+    def __init__(self, product_id: str=None, uri_pair: dict=None, address: str=None,
                     parents: list=None):
-        if uri_pair is None:
-            if address is None:
-                return
-            self.metadata = metaplex_nft_metadata(address)
-            self.image = open_image(self.metadata['image'])
-        else:
+        if product_id is not None:
+            all_assets = get_product_assets(product_id)
+            self.metadata = get_asset_data(list(filter(lambda x: x['tag'] == "metadata", all_assets))[0]["id"])
+            self.image = open_image(list(filter(lambda x: x['tag'] == "image", all_assets))[0]["uri"])
+        elif uri_pair is not None:
             self.metadata = load_json(uri_pair['metadata'])
             self.image = open_image(uri_pair['image'])
+        elif address is not None:
+            self.metadata = metaplex_nft_metadata(address)
+            self.image = open_image(self.metadata['image'])
+
         self.parents = parents
         self.address = address
         
@@ -82,13 +85,12 @@ class Breedable_NFT():
                             self.metadata['name'])
 
     def breed(self, otherNft,
-                botrGen, nftConfig: dict,
-                render_config: dict=RENDER_CONFIG_DEFAULT):
-        return generate_child_nft(self, otherNft, botrGen,
+                botrGen, dataset: Dataset, nftConfig: dict):
+        return generate_child_botr(self, otherNft, botrGen,
+                    dataset,
                     inheritence_fill=nftConfig['inheritence_fill'],
                     target_fill=nftConfig['target_fill'],
-                    overstep_lim=nftConfig['overstep_lim'],
-                    render_config=render_config)
+                    overstep_lim=nftConfig['overstep_lim'])
 
     def get_parent_attributes(self, parent: int=0):
         return sort_order_attributes(self.parents[parent].metadata['attributes'])
@@ -113,8 +115,8 @@ class Breedable_NFT():
         return self.address
 
     def get_identifier(self):
-        return self.metadata['product_info']
-        return self.metadata['properties']['homunculi']['identifier']
+        return self.metadata['product_info']['id']
+        # return self.metadata['properties']['homunculi']['identifier']
 
     def get_generator(self, base_path="assets/objects/"):
         return get_botr_generator(self.get_identifier(), base_path)
@@ -152,10 +154,14 @@ def generate_child_attrs(nft_1: Breedable_NFT, nft_2: Breedable_NFT):
     attrs_2 = sort_dict(attrs_2)              
     return child_attrs, attrs_1, attrs_2
 
+def add_parents_to_creators(path: str=None, metadata: str=None, parent_1: Breedable_NFT=None, 
+                        parent_2: Breedable_NFT=None, child_attrs: dict = None) -> dict:
 
-def add_parents_to_creators(path: str, parent_1: Breedable_NFT, parent_2: Breedable_NFT,
-                                child_attrs: dict = None) -> None:
-    metadata = load_json(path)
+    if path is not None:
+        metadata = load_json(path)
+    if metadata is None:
+        print(f'[!] Metadata is none, failed to add parents')
+        return
     creators = NFT_CONFIG_DEFAULT['nft_creators']
 
     parent_royalties = remaining_royalty_share(creators)
@@ -186,7 +192,20 @@ def add_parents_to_creators(path: str, parent_1: Breedable_NFT, parent_2: Breeda
             creators.append( {"address" : parent.get_address(), 
                 "share" : parent_royalties//2} )
     metadata['properties']['creators'] = creators
-    save_json(path, metadata)
+    if path is not None:
+        save_json(path, metadata)
+    return metadata
+
+def generate_child_botr(nft_1: Breedable_NFT, nft_2: Breedable_NFT,
+                            botrGen, dataset: Dataset, 
+                            inheritence_fill: float=0.75,
+                            target_fill: float=0.95, overstep_lim: float=1.25):
+    child_attrs, attrs_1, attrs_2 = generate_child_attrs(nft_1, nft_2)
+    render_matching_botr(botrGen, dataset, child_attrs, inheritence_fill, 
+                        target_fill, overstep_lim, False)
+    # botrGen.metadata = add_parents_to_creators(metadata=botrGen.metadata, parent_1=nft_1, 
+    #                     parent_2=nft_2, child_attrs=child_attrs)
+    return botrGen
 
 # combine two existing BOTR nfts to generate a new one
 def generate_child_nft(nft_1: Breedable_NFT, nft_2: Breedable_NFT,
@@ -200,8 +219,9 @@ def generate_child_nft(nft_1: Breedable_NFT, nft_2: Breedable_NFT,
                         target_fill, overstep_lim, verbose)
     botrGen.layers.clean_invisible(0.001)
     botrGen.generate(render_config)
+    # if out_path is not None:
     idx, [png_path, json_path] = botrGen.save_assets(out_path, verbose=verbose)
-    add_parents_to_creators(json_path, nft_1, nft_2, child_attrs)
+    add_parents_to_creators(path=json_path, parent_1=nft_1, parent_2=nft_2, child_attrs=child_attrs)
     return Breedable_NFT(
         uri_pair={"image":png_path, "metadata":json_path},
         parents=[nft_1, nft_2])

@@ -1,3 +1,4 @@
+from curses import meta
 import json
 from collections import OrderedDict
 from lib2to3.pgen2.tokenize import generate_tokens
@@ -163,6 +164,7 @@ def format_asset_metaplex(img_path: str, metadata: dict, product_info: dict=None
         metadata["properties"]["homunculi"] = {"product-info" : product_info }  
     else:
         metadata["properties"]["homunculi"] = {}
+    return metadata
 
 def save_metaplex_assets(base_path: str, image: Image, 
                         metadata: dict, product_info: dict=None) -> list:

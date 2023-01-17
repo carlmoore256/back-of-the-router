@@ -1,4 +1,3 @@
-import asyncio
 import api
 from dataset import Dataset, DATASET_CONFIG
 from botr import BOTR
@@ -15,49 +14,56 @@ CLIENT_RENDER = {
     'outputSize' : (256, 256),
     'jpeg_quality' : 100,
     'adaptiveHistogram' : False,
-    'showProgress' : False,
+    'showProgress' : True,
     "batchRenderSize" : 8 }
 
 NFT_CONFIG = {
     'inheritence_fill' : 0.75,
-    'target_fill' : 0.95,
-    'overstep_lim' : 1.25 }
+    'target_fill' : 0.96,
+    'overstep_lim' : 1.5 }
 
 PUBLIC_MEDIA = "/public-media-library"
 SAVE_DIR = "/botr/breed-request"
 FULL_SAVE_DIR = f"{PUBLIC_MEDIA}{SAVE_DIR}"
-SLEEP_TIME = 1000
+SLEEP_TIME = 1
+
+def breed(parent1_id: str, parent2_id: str, breed_id: str, dataset: Dataset):
+    parent1 = Breedable_NFT(parent1_id)
+    parent2 = Breedable_NFT(parent2_id)
+    botrGen = BOTR(config=GENERATOR_CONFIG_DEFAULT, registerProductInfo=False)
+    botrGen = parent1.breed(parent2, botrGen, dataset, nftConfig=NFT_CONFIG)
+    genItem = botrGen.generate(CLIENT_RENDER)
+    img_path = join(FULL_SAVE_DIR, f"{breed_id}.png")
+    meta_path = join(FULL_SAVE_DIR, f"{breed_id}.json")
+    metadata = format_asset_metaplex(img_path, genItem.metadata, None)
+    metadata = add_parents_to_creators(
+        metadata=metadata, parent_1=parent1,
+        parent_2=parent2, child_attrs=genItem.metadata["composition"])
+    genItem.image.save(img_path)
+    save_json(meta_path, metadata)
+    print(f'=> Saving breed request assets to {img_path} {meta_path}')
+    response = {
+        "id" : breed_id,
+        "status" : "complete",
+        "previewImageUri" :  f"https://homunculi.org{FULL_SAVE_DIR}/{f'{breed_id}.png'}",
+        "previewMetaUri" : f"https://homunculi.org{FULL_SAVE_DIR}/{f'{breed_id}.json'}",
+        "statusMessage" : f"Saving image: {img_path} Saved json: {meta_path}" }
+    return response
 
 def handle_response(breed_request, dataset: Dataset):
     for b in breed_request:
-        parent1 = Breedable_NFT(b['parent1'])
-        parent2 = Breedable_NFT(b['parent2'])
-        botrGen = BOTR(config=GENERATOR_CONFIG_DEFAULT,registerProductInfo=False)
-        botrGen = parent1.breed(parent2, botrGen, dataset, 
-                nftConfig=NFT_CONFIG)
-        genItem = botrGen.generate(CLIENT_RENDER)
-
-        req_id = b['id']
-
-        img_path = join(FULL_SAVE_DIR, f"{req_id}.png")
-        meta_path = join(FULL_SAVE_DIR, f"{req_id}.json")
-
-        metadata = format_asset_metaplex(img_path, genItem.metadata, None)
-        metadata = add_parents_to_creators(
-            metadata=metadata, parent_1=parent1,
-            parent_2=parent2, child_attrs=genItem.metadata["composition"])
-
-        genItem.image.save(img_path)
-        save_json(meta_path, metadata)
-
-        print(f'=> Saving breed request assets to {img_path} {meta_path}')
-
-        api.complete_breed_request({
-            "id" : req_id,
-            "status" : "complete",
-            "previewImageUri" :  f"https://homunculi.org{FULL_SAVE_DIR}/{f'{req_id}.png'}",
-            "previewMetaUri" : f"https://homunculi.org{FULL_SAVE_DIR}/{f'{req_id}.json'}" })
-
+        print("SENDING NEW BREED REQ")
+        try:
+            response = breed(b['parent1'], b['parent2'], b['id'], dataset)
+            api.complete_breed_request(response)
+        except Exception as e:
+            print(e)
+            api.complete_breed_request({
+                "id" : b["id"],
+                "status" : "failed",
+                "previewImageUri" : "",
+                "previewMetaUri" : "",
+                "statusMessage" : str(e) })
 
 def main():
     dataset = Dataset()

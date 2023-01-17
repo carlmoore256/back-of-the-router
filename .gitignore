@@ -165,3 +165,5 @@ deployment.ipynb
 stats.ipynb
 *.ipynb
 assets-0.1.0/
+
+assets-subset/

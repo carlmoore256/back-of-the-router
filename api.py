@@ -52,7 +52,7 @@ def api_base():
 #         return None
 def get(route):
     request = f"{api_base()}{route}"
-    print(f'REQUEST {request}')
+    # print(f'REQUEST {request}')
     try:
         return requests.get(request).json()
     except Exception as e:

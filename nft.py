@@ -65,6 +65,7 @@ class Breedable_NFT():
                     parents: list=None):
         if product_id is not None:
             all_assets = get_product_assets(product_id)
+            assert all_assets is not None and len(all_assets) > 0
             self.metadata = get_asset_data(list(filter(lambda x: x['tag'] == "metadata", all_assets))[0]["id"])
             self.image = open_image(list(filter(lambda x: x['tag'] == "image", all_assets))[0]["uri"])
         elif uri_pair is not None:
